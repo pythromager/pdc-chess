@@ -93,18 +93,18 @@
     <div id="screen-home">
       <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Time Control</div>
       <div class="tc-presets" id="tc-presets">
-        <button class="tc-btn" onclick="setPreset(0,0)">No Clock</button>
-        <button class="tc-btn" onclick="setPreset(60,0)">1 min</button>
-        <button class="tc-btn" onclick="setPreset(60,1)">1+1</button>
-        <button class="tc-btn" onclick="setPreset(120,1)">2+1</button>
-        <button class="tc-btn active" onclick="setPreset(180,0)">3 min</button>
-        <button class="tc-btn" onclick="setPreset(180,2)">3+2</button>
-        <button class="tc-btn" onclick="setPreset(300,0)">5 min</button>
-        <button class="tc-btn" onclick="setPreset(300,3)">5+3</button>
-        <button class="tc-btn" onclick="setPreset(600,0)">10 min</button>
-        <button class="tc-btn" onclick="setPreset(600,5)">10+5</button>
-        <button class="tc-btn" onclick="setPreset(900,10)">15+10</button>
-        <button class="tc-btn" onclick="setPreset(1800,0)">30 min</button>
+        <button class="tc-btn" onclick="setPreset(0,0,this)">No Clock</button>
+        <button class="tc-btn" onclick="setPreset(60,0,this)">1 min</button>
+        <button class="tc-btn" onclick="setPreset(60,1,this)">1+1</button>
+        <button class="tc-btn" onclick="setPreset(120,1,this)">2+1</button>
+        <button class="tc-btn active" onclick="setPreset(180,0,this)">3 min</button>
+        <button class="tc-btn" onclick="setPreset(180,2,this)">3+2</button>
+        <button class="tc-btn" onclick="setPreset(300,0,this)">5 min</button>
+        <button class="tc-btn" onclick="setPreset(300,3,this)">5+3</button>
+        <button class="tc-btn" onclick="setPreset(600,0,this)">10 min</button>
+        <button class="tc-btn" onclick="setPreset(600,5,this)">10+5</button>
+        <button class="tc-btn" onclick="setPreset(900,10,this)">15+10</button>
+        <button class="tc-btn" onclick="setPreset(1800,0,this)">30 min</button>
       </div>
       <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Custom</div>
       <div class="tc-custom">
@@ -241,7 +241,7 @@ let premovePending=null, premoveSel=null;
 let myPresenceRef=null;
 
 // ── Time control helpers ──────────────────────────────────────────────────────
-function setPreset(secs, inc){
+function setPreset(secs, inc, el){
   clockSecs=secs; clockInc=inc; clockDelay=0; clockOn=secs>0;
   document.getElementById('tc-h').value=Math.floor(secs/3600);
   document.getElementById('tc-m').value=Math.floor((secs%3600)/60);
@@ -249,7 +249,7 @@ function setPreset(secs, inc){
   document.getElementById('tc-inc').value=inc;
   document.getElementById('tc-del').value=0;
   document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
+  if(el) el.classList.add('active');
 }
 function clearPreset(){ document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active')); }
 function readTC(){
@@ -302,25 +302,15 @@ async function joinGame(){
   const snap=await ref.once('value');
   if(!snap.exists()){lobbyErr('Game not found.');return;}
   const d=snap.val();
-
-  // Check if this player was previously in this game (rejoin after refresh)
-  const savedCode=localStorage.getItem('pdc-code');
-  const savedColor=localStorage.getItem('pdc-color');
-  const isRejoin=(savedCode===code && savedColor==='b');
-
-  if(d.guest==='joined' && !isRejoin){lobbyErr('Game is full.');return;}
-
-  await ref.update({guest:'joined', guestOnline:true, clockTickAt:d.clockTickAt||Date.now()});
+  await ref.update({guest:'joined', guestOnline:true});
   myColor='b'; gameRef=ref; freshState();
-  localStorage.setItem('pdc-code',code);
-  localStorage.setItem('pdc-color','b');
-  clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
-  clockW=d.clockW; clockB=d.clockB;
+  clockSecs=d.clockW||300; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn!==false;
+  clockW=d.clockW||300; clockB=d.clockB||300;
   setupPresence(ref,'guest');
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('my-color-label').textContent='You are Black';
   ref.on('value',onServerUpdate);
-  startClock(); render();updateUI();updateClocks();
+  startClock(); render(); updateUI(); updateClocks();
 }
 
 // ── Presence / disconnect detection ──────────────────────────────────────────
