@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -93,18 +94,18 @@
     <div id="screen-home">
       <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Time Control</div>
       <div class="tc-presets" id="tc-presets">
-        <button class="tc-btn" onclick="setPreset(0,0,this)">No Clock</button>
-        <button class="tc-btn" onclick="setPreset(60,0,this)">1 min</button>
-        <button class="tc-btn" onclick="setPreset(60,1,this)">1+1</button>
-        <button class="tc-btn" onclick="setPreset(120,1,this)">2+1</button>
-        <button class="tc-btn active" onclick="setPreset(180,0,this)">3 min</button>
-        <button class="tc-btn" onclick="setPreset(180,2,this)">3+2</button>
-        <button class="tc-btn" onclick="setPreset(300,0,this)">5 min</button>
-        <button class="tc-btn" onclick="setPreset(300,3,this)">5+3</button>
-        <button class="tc-btn" onclick="setPreset(600,0,this)">10 min</button>
-        <button class="tc-btn" onclick="setPreset(600,5,this)">10+5</button>
-        <button class="tc-btn" onclick="setPreset(900,10,this)">15+10</button>
-        <button class="tc-btn" onclick="setPreset(1800,0,this)">30 min</button>
+        <button class="tc-btn" onclick="setPreset(0,0)">No Clock</button>
+        <button class="tc-btn" onclick="setPreset(60,0)">1 min</button>
+        <button class="tc-btn" onclick="setPreset(60,1)">1+1</button>
+        <button class="tc-btn" onclick="setPreset(120,1)">2+1</button>
+        <button class="tc-btn active" onclick="setPreset(180,0)">3 min</button>
+        <button class="tc-btn" onclick="setPreset(180,2)">3+2</button>
+        <button class="tc-btn" onclick="setPreset(300,0)">5 min</button>
+        <button class="tc-btn" onclick="setPreset(300,3)">5+3</button>
+        <button class="tc-btn" onclick="setPreset(600,0)">10 min</button>
+        <button class="tc-btn" onclick="setPreset(600,5)">10+5</button>
+        <button class="tc-btn" onclick="setPreset(900,10)">15+10</button>
+        <button class="tc-btn" onclick="setPreset(1800,0)">30 min</button>
       </div>
       <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Custom</div>
       <div class="tc-custom">
@@ -241,7 +242,7 @@ let premovePending=null, premoveSel=null;
 let myPresenceRef=null;
 
 // ── Time control helpers ──────────────────────────────────────────────────────
-function setPreset(secs, inc, el){
+function setPreset(secs, inc){
   clockSecs=secs; clockInc=inc; clockDelay=0; clockOn=secs>0;
   document.getElementById('tc-h').value=Math.floor(secs/3600);
   document.getElementById('tc-m').value=Math.floor((secs%3600)/60);
@@ -249,7 +250,7 @@ function setPreset(secs, inc, el){
   document.getElementById('tc-inc').value=inc;
   document.getElementById('tc-del').value=0;
   document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active'));
-  if(el) el.classList.add('active');
+  event.target.classList.add('active');
 }
 function clearPreset(){ document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active')); }
 function readTC(){
@@ -270,74 +271,75 @@ function randCode(){
   let s='';for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];
   return s;
 }
-
-async function hostGame(){
-  const tc=readTC();
-  clockSecs=tc.secs; clockInc=tc.inc; clockDelay=tc.delay; clockOn=tc.on;
-  const code=randCode();
-  const ref=db.ref('games/'+code);
-  freshState();
-  const snap=await ref.once('value');
-  if(snap.exists()){hostGame();return;}
-  await ref.set({
-    board:board.map(x=>x||''), turn:'w', castling, ep:-1,
-    posHist:[], moveLog:[], noCapCount:0, gameOver:false, lastFrom:-1, lastTo:-1,
-    clockW:tc.secs, clockB:tc.secs, clockInc:tc.inc, clockDelay:tc.delay, clockOn:tc.on,
-    clockTickAt:0, host:'joined', guest:'waiting', hostOnline:true, guestOnline:false
-  });
-  myColor='w'; gameRef=ref;
-  localStorage.setItem('pdc-code',code);
-  localStorage.setItem('pdc-color','w');
-  setupPresence(ref,'host');
-  document.getElementById('screen-home').classList.add('hidden');
-  document.getElementById('screen-wait').classList.remove('hidden');
-  document.getElementById('show-code').textContent=code;
-  ref.on('value',onServerUpdate);
+async function joinGame() {
+  const code = document.getElementById('code-input').value.trim().toUpperCase();
+  
+  if (code.length !== 6) {
+    lobbyErr('Enter a 6-character code.');
+    return;
+  }
+  
+  const ref = db.ref('games/' + code);
+  
+  try {
+    const snap = await ref.once('value');
+    
+    if (!snap.exists()) {
+      lobbyErr('Game not found.');
+      return;
+    }
+    
+    const d = snap.val();
+    
+    // 1. Reconnect as Host
+    if (d.host === 'joined' && d.hostOnline === false) {
+      await ref.update({ hostOnline: true });
+      myColor = 'w';
+      setupPresence(ref, 'host');
+    }
+    // 2. Join or Reconnect as Guest
+    else if (d.guest === 'waiting' || (d.guest === 'joined' && d.guestOnline === false)) {
+      await ref.update({ 
+        guest: 'joined', 
+        guestOnline: true, 
+        clockTickAt: Date.now() 
+      });
+      myColor = 'b';
+      setupPresence(ref, 'guest');
+    } 
+    // 3. Room is legitimately full
+    else {
+      lobbyErr('Game is full.');
+      return;
+    }
+    
+    gameRef = ref; 
+    freshState();
+    
+    clockSecs = d.clockW; 
+    clockInc = d.clockInc || 0; 
+    clockDelay = d.clockDelay || 0; 
+    clockOn = d.clockOn;
+    clockW = d.clockW; 
+    clockB = d.clockB;
+    
+    document.getElementById('lobby').classList.add('hidden');
+    document.getElementById('my-color-label').textContent = myColor === 'w' ? 'You are White' : 'You are Black';
+    
+    ref.on('value', onServerUpdate);
+    startClock(); 
+    
+    // If these functions are missing from your file, the script will crash here
+    render(); 
+    updateUI(); 
+    updateClocks();
+    
+  } catch (error) {
+    console.error("Join Error:", error);
+    lobbyErr('Connection error. Check console.');
+  }
 }
-
-async function joinGame(){
-  const code=document.getElementById('code-input').value.trim().toUpperCase();
-  if(code.length!==6){lobbyErr('Enter a 6-character code.');return;}
   
-  const ref=db.ref('games/'+code);
-  const snap=await ref.once('value');
-  
-  if(!snap.exists()){lobbyErr('Game not found.');return;}
-  
-  const d=snap.val();
-  
-  // Set guest status and online presence
-  await ref.update({guest:'joined', guestOnline:true});
-  
-  myColor='b'; 
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('my-color-label').textContent='You are Black';
-  gameRef=ref; 
-  freshState();
-  
-  // Sync clock settings from the host's configuration
-  clockSecs=d.clockW||300; 
-  clockInc=d.clockInc||0; 
-  clockDelay=d.clockDelay||0; 
-  clockOn=d.clockOn!==false;
-  clockW=d.clockW||300; 
-  clockB=d.clockB||300;
-  
-  // Setup presence and listeners
-  setupPresence(ref,'guest');
-  ref.on('value',onServerUpdate);
-  
-  // HIDE LOBBY AND INITIALIZE UI
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('my-color-label').textContent='You are Black';
-  
-  startClock(); 
-  render(); 
-  updateUI(); 
-  updateClocks();
-}
-  
-
 // ── Presence / disconnect detection ──────────────────────────────────────────
 function setupPresence(ref, role){
   const onlineKey = role==='host' ? 'hostOnline' : 'guestOnline';
@@ -360,7 +362,7 @@ function onServerUpdate(snap){
   const d=snap.val();
 
   // Host: detect guest joined
-  if(d.guest==='joined' && !document.getElementById('lobby').classList.contains('hidden')){
+  if(myColor==='w' && d.guest==='joined' && !document.getElementById('lobby').classList.contains('hidden')){
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('my-color-label').textContent='You are White';
     clockW=d.clockW; clockB=d.clockB;
@@ -816,25 +818,6 @@ function askPromo(c){
 // ── Boot ──────────────────────────────────────────────────────────────────────
 freshState();
 render();
-
-// Auto-rejoin if refreshed mid-game
-(async()=>{
-  const code=localStorage.getItem('pdc-code');
-  const color=localStorage.getItem('pdc-color');
-  if(!code||!color) return;
-  const ref=db.ref('games/'+code);
-  const snap=await ref.once('value');
-  if(!snap.exists()||snap.val().gameOver) return;
-  const d=snap.val();
-  myColor=color; gameRef=ref;
-  clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
-  clockW=d.clockW; clockB=d.clockB;
-  setupPresence(ref, color==='w'?'host':'guest');
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('my-color-label').textContent='You are '+(color==='w'?'White':'Black')+' (rejoined)';
-  ref.on('value',onServerUpdate);
-  startClock(); render(); updateUI(); updateClocks();
-})();
 </script>
 </body>
 </html>
