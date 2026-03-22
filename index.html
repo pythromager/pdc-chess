@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -344,8 +345,8 @@ function onServerUpdate(snap){
     render();updateUI();updateClocks();
   }
 
-  // Sync state when it's opponent's move arriving (their turn just ended = now our turn)
-  if(d.turn===myColor || d.gameOver){
+  // Sync state: always when it's our turn, game over, OR we just joined and need initial board
+  if(d.turn===myColor || d.gameOver || (myColor==='b' && d.guest==='joined')){
     board=d.board.map(x=>x||null);
     turn=d.turn; castling=d.castling;
     epSq=d.ep===-1?null:d.ep;
