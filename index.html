@@ -180,7 +180,7 @@
         <div>♔ <b>King</b>: must move when in check; no blocking</div>
       </div>
     </div>
-    <button class="btn" onclick="resetGame()">New Game</button>
+    <button class="btn" onclick="window.location.reload()">New Game</button>
   </div>
 </div>
 <div class="promo-overlay hidden" id="promo-overlay">
@@ -517,7 +517,115 @@ function askPromo(c){
   });
 }
 
-resetGame();
+// ── Firebase ──────────────────────────────────────────────────────────────────
+firebase.initializeApp({apiKey:"AIzaSyDQ-pGKot5lj2uZLnsKfodNvjg8uBkqTpw",authDomain:"pdc-chess.firebaseapp.com",databaseURL:"https://pdc-chess-default-rtdb.firebaseio.com",projectId:"pdc-chess",storageBucket:"pdc-chess.firebasestorage.app",messagingSenderId:"535287918297",appId:"1:535287918297:web:03bcf8e28489febbe198c8"});
+const db=firebase.database();
+
+// ── Multiplayer state ─────────────────────────────────────────────────────────
+let myColor=null,gameRef=null;
+let clockSecs=180,clockInc=0,clockDelay=0,clockOn=true;
+let clockW=180,clockB=180,clockTickAt=null,clockInterval=null;
+let premovePending=null,premoveSel=null;
+
+function setPreset(secs,inc,del,btn){document.getElementById('tc-h').value=Math.floor(secs/3600);document.getElementById('tc-m').value=Math.floor((secs%3600)/60);document.getElementById('tc-s').value=secs%60;document.getElementById('tc-inc').value=inc;document.getElementById('tc-del').value=del;document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('sel'));if(btn)btn.classList.add('sel');}
+function clearSel(){document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('sel'));}
+function readTC(){const h=parseInt(document.getElementById('tc-h').value)||0,m=parseInt(document.getElementById('tc-m').value)||0,s=parseInt(document.getElementById('tc-s').value)||0,inc=parseInt(document.getElementById('tc-inc').value)||0,del=parseInt(document.getElementById('tc-del').value)||0,total=h*3600+m*60+s;return{secs:total,inc,delay:del,on:total>0};}
+function lobbyErr(msg){document.getElementById('lobby-err').textContent=msg;}
+function randCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
+
+async function hostGame(){
+  const tc=readTC();clockSecs=tc.secs;clockInc=tc.inc;clockDelay=tc.delay;clockOn=tc.on;
+  const code=randCode(),ref=db.ref('games/'+code);freshState();
+  const snap=await ref.once('value');if(snap.exists()){hostGame();return;}
+  await ref.set({board:board.map(x=>x||''),turn:'w',castling,ep:-1,posHist:[],moveLog:[],noCapCount:0,gameOver:false,lastFrom:-1,lastTo:-1,clockW:tc.secs,clockB:tc.secs,clockInc:tc.inc,clockDelay:tc.delay,clockOn:tc.on,clockTickAt:0,host:'joined',guest:'waiting'});
+  myColor='w';gameRef=ref;
+  document.getElementById('screen-home').classList.add('hidden');
+  document.getElementById('screen-wait').classList.remove('hidden');
+  document.getElementById('show-code').textContent=code;
+  ref.on('value',onServerUpdate);
+}
+
+async function joinGame(){
+  const code=document.getElementById('code-input').value.trim().toUpperCase();
+  if(code.length!==6){lobbyErr('Enter a 6-character code.');return;}
+  const ref=db.ref('games/'+code);
+  const snap=await ref.once('value');
+  if(!snap.exists()){lobbyErr('Game not found.');return;}
+  const d=snap.val();
+  await ref.update({guest:'joined',clockTickAt:Date.now()});
+  myColor='b';gameRef=ref;freshState();
+  clockSecs=d.clockW||300;clockInc=d.clockInc||0;clockDelay=d.clockDelay||0;clockOn=d.clockOn!==false;
+  clockW=d.clockW||300;clockB=d.clockB||300;
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('my-color-label').textContent='You are Black';
+  ref.on('value',onServerUpdate);
+  startClock();render();updateUI();updateClocks();
+}
+
+function onServerUpdate(snap){
+  if(!snap.exists())return;const d=snap.val();
+  if(myColor==='w'&&d.guest==='joined'&&!document.getElementById('lobby').classList.contains('hidden')){document.getElementById('lobby').classList.add('hidden');document.getElementById('my-color-label').textContent='You are White';clockW=d.clockW||clockSecs;clockB=d.clockB||clockSecs;freshState();startClock();render();updateUI();updateClocks();}
+  if(d.turn===myColor||d.gameOver||(myColor==='b'&&d.guest==='joined')){board=d.board.map(x=>x||null);turn=d.turn;castling=d.castling;epSq=d.ep===-1?null:d.ep;posHist=d.posHist||[];moveLog=d.moveLog||[];noCapCount=d.noCapCount||0;gameOver=d.gameOver||false;lastMove=d.lastFrom>=0?{from:d.lastFrom,to:d.lastTo}:null;clockW=d.clockW;clockB=d.clockB;clockTickAt=d.clockTickAt||Date.now();sel=null;hilights=[];render();updateUI();updateClocks();if(gameOver)clearInterval(clockInterval);if(premovePending&&turn===myColor&&!gameOver){const pm=premovePending;premovePending=null;document.getElementById('premove-label').textContent='';executePremove(pm);}}
+}
+
+function startClock(){clearInterval(clockInterval);if(!clockOn)return;clockInterval=setInterval(()=>{if(gameOver||!clockTickAt)return;const elapsed=Math.max(0,(Date.now()-clockTickAt)/1000-clockDelay);const w=turn==='w'?Math.max(0,clockW-elapsed):clockW,b=turn==='b'?Math.max(0,clockB-elapsed):clockB;showClock('cw',w,turn==='w');showClock('cb',b,turn==='b');},100);}
+function showClock(id,secs,active){const el=document.getElementById(id);if(!clockOn){el.textContent='∞';el.className='clock-time';return;}const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60),s=Math.floor(secs%60);el.textContent=h>0?h+':'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s:m+':'+(s<10?'0':'')+s;el.className='clock-time'+(active?' active':'')+(secs<30&&secs>0?' low':'');}
+function updateClocks(){showClock('cw',clockW,turn==='w');showClock('cb',clockB,turn==='b');}
+
+function render(){
+  const el=document.getElementById('board');el.innerHTML='';
+  const isChk=isInCheck(board,turn),ki=kingIdx(board,turn),flipped=myColor==='b';
+  const files=document.getElementById('coord-files');
+  if(files){const spans=files.querySelectorAll('span');['a','b','c','d','e','f','g','h'].forEach((f,i)=>{if(spans[i])spans[i].textContent=flipped?['h','g','f','e','d','c','b','a'][i]:f;});}
+  const ranks=document.getElementById('coord-ranks');
+  if(ranks){const divs=ranks.querySelectorAll('.coord-rank');[8,7,6,5,4,3,2,1].forEach((n,i)=>{if(divs[i])divs[i].textContent=flipped?9-n:n;});}
+  for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+    const dr=flipped?7-r:r,df=flipped?7-f:f,i=idx(dr,df);
+    const sq=document.createElement('div');sq.className='sq '+((dr+df)%2===0?'light':'dark');
+    if(lastMove){if(lastMove.from===i)sq.classList.add('last-from');if(lastMove.to===i)sq.classList.add('last-to');}
+    if(isChk&&i===ki)sq.classList.add('king-check');if(sel===i)sq.classList.add('selected');
+    if(hilights.some(m=>m.to===i)){const m=hilights.find(m=>m.to===i);const dot=document.createElement('div');dot.className=(board[i]&&clr(board[i])!==turn)||m.ep?'cap-ring':'dot';sq.appendChild(dot);}
+    if(board[i]){const pe=document.createElement('div');pe.className='piece';pe.textContent=PIECE_CHAR[board[i]];pe.style.cssText=pieceStyle(board[i]);sq.appendChild(pe);}
+    sq.addEventListener('click',()=>onClick(i));el.appendChild(sq);
+  }
+}
+
+function onClick(i){
+  if(gameOver)return;
+  if(turn!==myColor){handlePremoveClick(i);return;}
+  if(sel!==null&&hilights.some(m=>m.to===i)){const m=hilights.find(m=>m.to===i);if(violatesMusts(m)){const{nb,nep,ncas}=applyMove(board,m,castling);if(isLosingForOpp(nb,opp(turn),nep,ncas)){doMove(m);}else{setStatus('⚡ Illegal — violates a must.','warn');}return;}doMove(m);return;}
+  if(board[i]&&clr(board[i])===turn){const musts=getMusts(board,turn,epSq,castling);const candidates=musts.length>0?allStdMoves(board,turn,epSq,castling).filter(m=>m.from===i):allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===i);const moves=candidates.filter(m=>{if(!violatesMusts(m))return true;const{nb,nep,ncas}=applyMove(board,m,castling);return isLosingForOpp(nb,opp(turn),nep,ncas);});sel=i;hilights=moves;render();setStatus('Selected '+board[i]+' at '+sqN(rc(i).r,rc(i).f)+(musts.length>0?' — musts active':''));return;}
+  sel=null;hilights=[];render();
+}
+
+function handlePremoveClick(i){
+  if(premoveSel!==null){if(i!==premoveSel){premovePending={from:premoveSel,to:i};document.getElementById('premove-label').textContent='⏳ Premove: '+sqN(rc(premoveSel).r,rc(premoveSel).f)+'→'+sqN(rc(i).r,rc(i).f);premoveSel=null;sel=null;hilights=[];render();return;}premoveSel=null;sel=null;hilights=[];render();return;}
+  if(board[i]&&clr(board[i])===myColor){premoveSel=i;sel=i;hilights=allStdMoves(board,myColor,epSq,castling).filter(m=>m.from===i);render();setStatus('Premove — click destination','warn');return;}
+  premovePending=null;premoveSel=null;sel=null;hilights=[];document.getElementById('premove-label').textContent='';render();
+}
+function executePremove(pm){const moves=allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===pm.from&&m.to===pm.to);if(moves.length>0&&!violatesMusts(moves[0]))doMove(moves[0]);}
+
+async function doMove(m){
+  if(typ(board[m.from])==='P'){const{r}=rc(m.to);if((clr(board[m.from])==='w'&&r===0)||(clr(board[m.from])==='b'&&r===7))m.promo=await askPromo(clr(board[m.from]));}
+  const wasCap=!!m.cap,{nb,nep,ncas}=applyMove(board,m,castling);
+  const{r:fr,f:ff}=rc(m.from),{r:tr,f:tf}=rc(m.to);
+  const note=m.castle?('O-O'+(m.castle==='Q'?'-O':'')):(sqN(fr,ff)+(wasCap?'x':'-')+sqN(tr,tf)+(m.promo?'='+m.promo:''));
+  const newMoveLog=[...moveLog,note],newNoCap=wasCap?0:noCapCount+1,newTurn=opp(turn);
+  const newPosHist=[...posHist.slice(-19),posKey(nb,newTurn,nep,ncas)];
+  const now=Date.now(),elapsed=clockTickAt?Math.max(0,(now-clockTickAt)/1000-clockDelay):0;
+  const newClockW=turn==='w'?Math.max(0,clockW-elapsed)+clockInc:clockW;
+  const newClockB=turn==='b'?Math.max(0,clockB-elapsed)+clockInc:clockB;
+  let newGameOver=false,endWinner=null,endReason='';
+  if(newNoCap>=15){const ws=calcSpace(nb,'w'),bs=calcSpace(nb,'b');if(ws!==bs){newGameOver=true;endWinner=ws>bs?'w':'b';endReason='15-move space win';}}
+  if(!newGameOver){const ev=evaluate(nb,newTurn,nep,ncas);if(ev.result==='checkmate'){newGameOver=true;endWinner=ev.winner;endReason='Checkmate — '+ev.reason;}else if(ev.result==='stalemate'){newGameOver=true;endReason='Stalemate';}else if(ev.result==='double-must'){newGameOver=true;endWinner=ev.winner;endReason='Double-must loss';}else if(ev.result==='draw'){newGameOver=true;endReason='Draw: '+ev.reason;}}
+  await gameRef.update({board:nb.map(x=>x||''),turn:newTurn,castling:ncas,ep:nep??-1,posHist:newPosHist,moveLog:newMoveLog,noCapCount:newNoCap,gameOver:newGameOver,lastFrom:m.from,lastTo:m.to,clockW:newClockW,clockB:newClockB,clockTickAt:now});
+  board=nb;turn=newTurn;castling=ncas;epSq=nep;posHist=newPosHist;moveLog=newMoveLog;noCapCount=newNoCap;gameOver=newGameOver;lastMove={from:m.from,to:m.to};clockW=newClockW;clockB=newClockB;clockTickAt=now;sel=null;hilights=[];
+  if(newGameOver){clearInterval(clockInterval);setStatus(endWinner?(endWinner==='w'?'White':'Black')+' wins! '+endReason:'Draw — '+endReason,endWinner?'ok':'');}
+  else{const ev=evaluate(board,turn,epSq,castling);if(ev.isChk)setStatus((turn==='w'?'White':'Black')+' is in check!','warn');else if(ev.musts&&ev.musts.length>0)setStatus('⚡ Musts active — play forced move or find M1.','warn');else setStatus('');}
+  render();updateUI();updateClocks();
+}
+
+freshState();render();
 </script>
 </body>
 </html>
