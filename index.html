@@ -594,7 +594,7 @@ function onClick(i){
   if(gameOver)return;
   if(turn!==myColor){handlePremoveClick(i);return;}
   if(sel!==null&&hilights.some(m=>m.to===i)){const m=hilights.find(m=>m.to===i);if(violatesMusts(m)){const{nb,nep,ncas}=applyMove(board,m,castling);if(isLosingForOpp(nb,opp(turn),nep,ncas)){doMove(m);}else{setStatus('⚡ Illegal — violates a must.','warn');}return;}doMove(m);return;}
-  if(board[i]&&clr(board[i])===turn){const musts=getMusts(board,turn,epSq,castling);const candidates=musts.length>0?allStdMoves(board,turn,epSq,castling).filter(m=>m.from===i):allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===i);const moves=candidates.filter(m=>{if(!violatesMusts(m))return true;const{nb,nep,ncas}=applyMove(board,m,castling);return isLosingForOpp(nb,opp(turn),nep,ncas);});sel=i;hilights=moves;render();setStatus('Selected '+board[i]+' at '+sqN(rc(i).r,rc(i).f)+(musts.length>0?' — musts active':''));return;}
+  if(board[i]&&clr(board[i])===turn){const musts=getMusts(board,turn,epSq,castling);const onlyKingCheck=musts.length===1&&musts[0].kind==='king-check';const candidates=(!onlyKingCheck&&musts.length>0)?allStdMoves(board,turn,epSq,castling).filter(m=>m.from===i):allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===i);const moves=candidates.filter(m=>{if(!violatesMusts(m))return true;const{nb,nep,ncas}=applyMove(board,m,castling);return isLosingForOpp(nb,opp(turn),nep,ncas);});sel=i;hilights=moves;render();setStatus('Selected '+board[i]+' at '+sqN(rc(i).r,rc(i).f)+(musts.length>0?' — musts active':''));return;}
   sel=null;hilights=[];render();
 }
 
