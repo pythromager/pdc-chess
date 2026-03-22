@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Piece Disability Chess</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=JetBrains+Mono:wght@300;400;600&display=swap');
+  :root {
+    --bg:#0a0a0a; --surface:#111; --border:#222;
+    --light-sq:#c8b89a; --dark-sq:#5c4a32;
+    --highlight:#f0c040; --check:#cc3300; --must:#ff6600;
+    --valid:rgba(100,220,100,0.35); --cap-ring:rgba(220,60,60,0.7);
+    --text:#e8e0d0; --muted:#666; --accent:#c8a850;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;
+    background-image:radial-gradient(ellipse at 20% 50%,#1a1200,transparent 60%),
+                     radial-gradient(ellipse at 80% 20%,#0a1a0a,transparent 50%);}
+  h1{font-family:'Playfair Display',serif;font-size:clamp(1.4rem,3vw,2.2rem);
+    letter-spacing:.15em;color:var(--accent);text-align:center;margin-bottom:4px;text-transform:uppercase;}
+  .subtitle{font-size:.65rem;color:var(--muted);letter-spacing:.3em;text-transform:uppercase;margin-bottom:16px;}
+  .game-layout{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;justify-content:center;}
+  .coord-files{display:flex;padding-left:24px;margin-bottom:2px;}
+  .coord-files span{width:70px;text-align:center;font-size:.6rem;color:var(--muted);}
+  .coord-rank{width:24px;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted);}
+  #board{display:grid;grid-template-columns:repeat(8,70px);grid-template-rows:repeat(8,70px);
+    border:2px solid var(--border);box-shadow:0 0 60px rgba(200,168,80,.08),0 20px 60px rgba(0,0,0,.8);}
+  .sq{width:70px;height:70px;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;position:relative;user-select:none;}
+  .sq.light{background:var(--light-sq);} .sq.dark{background:var(--dark-sq);}
+  .sq.selected{outline:3px solid var(--highlight);outline-offset:-3px;filter:brightness(1.2);}
+  .sq.last-from{filter:brightness(1.1);} .sq.last-to{filter:brightness(1.15);}
+  .sq.king-check{background:var(--check)!important;}
+  .sq .dot{position:absolute;width:22px;height:22px;border-radius:50%;
+    background:var(--valid);pointer-events:none;z-index:2;}
+  .sq .cap-ring{position:absolute;width:64px;height:64px;border-radius:50%;
+    border:4px solid var(--cap-ring);pointer-events:none;z-index:2;}
+  .piece{font-size:42px;line-height:1;z-index:3;position:relative;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));transition:transform .1s;}
+  .sq:hover .piece{transform:scale(1.08);}
+  .panel{width:240px;display:flex;flex-direction:column;gap:12px;}
+  .box{background:var(--surface);border:1px solid var(--border);padding:14px;border-radius:2px;}
+  .box h3{font-family:'Playfair Display',serif;font-size:.75rem;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:10px;
+    border-bottom:1px solid var(--border);padding-bottom:6px;}
+  .turn-row{display:flex;align-items:center;gap:10px;font-size:.75rem;}
+  .tdot{width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);flex-shrink:0;}
+  .tdot.w{background:#f5f0e8;} .tdot.b{background:#1a1a1a;}
+  .status{font-size:.7rem;color:var(--text);line-height:1.5;min-height:40px;margin-top:8px;}
+  .status.warn{color:var(--must);} .status.err{color:var(--check);} .status.ok{color:#7ec87e;}
+  .must-list{font-size:.65rem;color:var(--must);line-height:1.8;}
+  .log{font-size:.6rem;color:var(--muted);max-height:180px;overflow-y:auto;line-height:2;}
+  .log span{color:var(--text);}
+  .btn{background:transparent;border:1px solid var(--accent);color:var(--accent);
+    font-family:'JetBrains Mono',monospace;font-size:.65rem;letter-spacing:.15em;
+    text-transform:uppercase;padding:8px 14px;cursor:pointer;width:100%;transition:background .15s,color .15s;}
+  .btn:hover{background:var(--accent);color:var(--bg);}
+  .legend{font-size:.6rem;line-height:2;color:var(--muted);}
+  .legend b{color:var(--text);}
+  .sbar{height:4px;background:var(--border);border-radius:2px;margin:4px 0;overflow:hidden;}
+  .sfill{height:100%;background:var(--accent);transition:width .3s;}
+  .slabel{font-size:.6rem;color:var(--muted);display:flex;justify-content:space-between;margin-top:3px;}
+  .promo-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);
+    display:flex;align-items:center;justify-content:center;z-index:100;}
+  .promo-box{background:var(--surface);border:1px solid var(--accent);padding:30px;text-align:center;}
+  .promo-box h3{font-family:'Playfair Display',serif;color:var(--accent);margin-bottom:20px;}
+  .promo-pieces{display:flex;gap:16px;justify-content:center;}
+  .promo-piece{font-size:48px;cursor:pointer;padding:10px;border:1px solid var(--border);transition:border-color .15s,background .15s;}
+  .promo-piece:hover{border-color:var(--accent);background:#1a1a00;}
+  .lobby{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:16px;}
+  .lobby-box{background:var(--surface);border:1px solid var(--accent);padding:40px;min-width:320px;text-align:center;}
+  .lobby-box h2{font-family:'Playfair Display',serif;color:var(--accent);font-size:1.4rem;margin-bottom:20px;letter-spacing:.1em;}
+  .lobby-input{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.8rem;padding:10px;width:100%;margin-bottom:10px;outline:none;}
+  .lobby-input:focus{border-color:var(--accent);}
+  .lobby-btn{background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;padding:10px;cursor:pointer;width:100%;margin-top:6px;transition:background .15s,color .15s;}
+  .lobby-btn:hover{background:var(--accent);color:var(--bg);}
+  .lobby-or{color:var(--muted);font-size:.65rem;margin:10px 0;letter-spacing:.2em;}
+  .clock-row{display:flex;gap:8px;justify-content:center;margin-bottom:8px;}
+  .clock{font-size:1.4rem;font-family:'Playfair Display',serif;color:var(--accent);background:var(--surface);border:1px solid var(--border);padding:6px 16px;min-width:90px;text-align:center;}
+  .clock.active{border-color:var(--accent);color:#fff;}
+  .clock.low{color:var(--check);}
+  .premove-indicator{font-size:.6rem;color:var(--must);margin-top:4px;min-height:16px;}
+  .role-badge{font-size:.6rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-top:6px;}
+  .waiting{color:var(--muted);font-size:.7rem;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<!-- Lobby -->
+<div class="lobby" id="lobby">
+  <div class="lobby-box">
+    <h2>Piece Disability Chess</h2>
+    <div id="lobby-main">
+      <div style="font-size:.6rem;color:var(--muted);margin-bottom:12px;">Clock:
+        <select id="clock-sel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit;padding:4px;margin-left:6px;">
+          <option value="180">3 min</option>
+          <option value="300" selected>5 min</option>
+          <option value="600">10 min</option>
+          <option value="900">15 min</option>
+          <option value="0">No clock</option>
+        </select>
+      </div>
+      <button class="lobby-btn" onclick="createGame()">Create New Game</button>
+      <div class="lobby-or">— or join existing —</div>
+      <input class="lobby-input" id="join-code" placeholder="Enter game code..." maxlength="6" onkeydown="if(event.key==='Enter')joinGame()">
+      <button class="lobby-btn" onclick="joinGame()">Join Game</button>
+    </div>
+    <div id="lobby-waiting" class="hidden">
+      <div class="waiting">Waiting for opponent...</div>
+      <div style="margin-top:16px;font-size:.9rem;color:var(--accent);">Code: <b id="game-code-display" style="font-size:1.2rem;letter-spacing:.2em;"></b></div>
+      <div style="font-size:.6rem;color:var(--muted);margin-top:6px;">Share this code with your friend</div>
+    </div>
+    <div id="lobby-status" style="font-size:.65rem;color:var(--must);margin-top:10px;min-height:16px;"></div>
+  </div>
+</div>
+
+<h1>Piece Disability Chess</h1>
+<p class="subtitle">PDC — Modified Rules Variant</p>
+<div class="game-layout">
+  <div>
+    <div class="coord-files"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span></div>
+    <div style="display:flex">
+      <div style="display:flex;flex-direction:column">
+        <div class="coord-rank">8</div><div class="coord-rank">7</div><div class="coord-rank">6</div>
+        <div class="coord-rank">5</div><div class="coord-rank">4</div><div class="coord-rank">3</div>
+        <div class="coord-rank">2</div><div class="coord-rank">1</div>
+      </div>
+      <div id="board"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="box">
+      <h3>Clock</h3>
+      <div class="clock-row">
+        <div><div class="clock" id="clock-w">5:00</div><div style="font-size:.55rem;color:var(--muted);text-align:center;margin-top:2px;">White</div></div>
+        <div><div class="clock" id="clock-b">5:00</div><div style="font-size:.55rem;color:var(--muted);text-align:center;margin-top:2px;">Black</div></div>
+      </div>
+      <div class="role-badge" id="role-badge">—</div>
+      <div class="premove-indicator" id="premove-indicator"></div>
+    </div>
+    <div class="box">
+      <h3>Turn</h3>
+      <div class="turn-row"><div class="tdot w" id="tdot"></div><span id="ttext">White to move</span></div>
+      <div class="status" id="status">Select a piece to begin.</div>
+    </div>
+    <div class="box">
+      <h3>Active Musts</h3>
+      <div class="must-list" id="must-list">None</div>
+    </div>
+    <div class="box">
+      <h3>Space (15-move)</h3>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;">No-capture moves: <span id="nocap">0</span>/15</div>
+      <div class="sbar"><div class="sfill" id="wbar" style="width:50%"></div></div>
+      <div class="slabel"><span>White: <span id="ws">0</span></span><span>Black: <span id="bs">0</span></span></div>
+    </div>
+    <div class="box">
+      <h3>Move Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+    <div class="box">
+      <h3>PDC Rules</h3>
+      <div class="legend">
+        <div>♙ <b>Pawn</b>: captures pawns only (+ knight on d4/d5/e4/e5)</div>
+        <div>♖ <b>Rook</b>: must capture, range ≤3 sq</div>
+        <div>♘ <b>Knight</b>: captures checkers only</div>
+        <div>♗ <b>Bishop</b>: must give check if able</div>
+        <div>♕ <b>Queen</b>: must capture non-knights</div>
+        <div>♔ <b>King</b>: must move when in check</div>
+      </div>
+    </div>
+    <button class="btn" onclick="resetGame()">New Game</button>
+  </div>
+</div>
+<div class="promo-overlay hidden" id="promo-overlay">
+  <div class="promo-box">
+    <h3>Promote Pawn</h3>
+    <div class="promo-pieces" id="promo-pieces"></div>
+  </div>
+</div>
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const FILES  = ['a','b','c','d','e','f','g','h'];
+const GLYPHS = {wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'};
+// Center squares d4=idx(4,3), e4=idx(4,4), d5=idx(3,3), e5=idx(3,4)
+// River zone: c4-f5 = ranks 4-5 (r=3,4), files c-f (f=2,3,4,5) — 8 squares
+const CENTER = new Set([
+  idx(3,2),idx(3,3),idx(3,4),idx(3,5), // c5,d5,e5,f5
+  idx(4,2),idx(4,3),idx(4,4),idx(4,5)  // c4,d4,e4,f4
+]);
+
+function idx(r,f){ return r*8+f; }
+function rc(i)   { return {r:Math.floor(i/8), f:i%8}; }
+function inB(r,f){ return r>=0&&r<8&&f>=0&&f<8; }
+function clr(p)  { return p?p[0]:null; }
+function typ(p)  { return p?p[1]:null; }
+function opp(c)  { return c==='w'?'b':'w'; }
+function sqN(r,f){ return FILES[f]+(8-r); }
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let board, turn, sel, hilights, castling, epSq, posHist, moveLog, noCapCount, gameOver, lastMove;
+
+function resetGame(){
+  board = initBoard();
+  turn='w'; sel=null; hilights=[];
+  castling={wK:true,wQ:true,bK:true,bQ:true};
+  epSq=null; posHist=[]; moveLog=[]; noCapCount=0; gameOver=false; lastMove=null;
+  document.getElementById('promo-overlay').classList.add('hidden');
+  render(); updateUI();
+}
+
+function initBoard(){
+  const b=Array(64).fill(null);
+  ['R','N','B','Q','K','B','N','R'].forEach((t,f)=>{
+    b[idx(0,f)]='b'+t; b[idx(1,f)]='bP';
+    b[idx(6,f)]='wP'; b[idx(7,f)]='w'+t;
+  });
+  return b;
+}
+
+// ── Raw attacks (ignores PDC capture rules, used for check detection) ─────────
+function rawAttacks(b, i){
+  const p=b[i]; if(!p) return [];
+  const {r,f}=rc(i), c=clr(p), t=typ(p), res=[];
+  const slide=(dr,df)=>{ let nr=r+dr,nf=f+df; while(inB(nr,nf)){ res.push(idx(nr,nf)); if(b[idx(nr,nf)]) break; nr+=dr; nf+=df; }};
+  if(t==='P'){ const d=c==='w'?-1:1; [f-1,f+1].forEach(nf=>{ if(inB(r+d,nf)) res.push(idx(r+d,nf)); }); }
+  else if(t==='N'){ [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,df])=>{ if(inB(r+dr,f+df)) res.push(idx(r+dr,f+df)); }); }
+  else if(t==='B'){ [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(d=>slide(...d)); }
+  else if(t==='R'){ [[-1,0],[1,0],[0,-1],[0,1]].forEach(d=>slide(...d)); }
+  else if(t==='Q'){ [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(d=>slide(...d)); }
+  else if(t==='K'){ [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,df])=>{ if(inB(r+dr,f+df)) res.push(idx(r+dr,f+df)); }); }
+  return res;
+}
+
+function attackedByColor(b,c){ const s=new Set(); for(let i=0;i<64;i++) if(clr(b[i])===c) rawAttacks(b,i).forEach(x=>s.add(x)); return s; }
+function kingIdx(b,c){ for(let i=0;i<64;i++) if(b[i]===c+'K') return i; return -1; }
+function isInCheck(b,c){ const ki=kingIdx(b,c); return ki>=0 && attackedByColor(b,opp(c)).has(ki); }
+function getCheckers(b,c){ const ki=kingIdx(b,c); return Array.from({length:64},(_,i)=>i).filter(i=>clr(b[i])===opp(c)&&rawAttacks(b,i).includes(ki)); }
+
+// ── Apply move ────────────────────────────────────────────────────────────────
+function applyMove(b, m, cas){
+  const nb=[...b], p=nb[m.from], c=clr(p), t=typ(p);
+  let nep=null; const ncas={...cas};
+  nb[m.to]=p; nb[m.from]=null;
+  if(m.ep){ const er=rc(m.to).r+(c==='w'?1:-1); nb[idx(er,rc(m.to).f)]=null; }
+  if(m.dp) nep=idx(rc(m.to).r+(c==='w'?1:-1), rc(m.to).f);
+  if(m.castle){ const r=rc(m.from).r; if(m.castle==='K'){nb[idx(r,5)]=c+'R';nb[idx(r,7)]=null;}else{nb[idx(r,3)]=c+'R';nb[idx(r,0)]=null;} }
+  if(m.promo) nb[m.to]=c+m.promo;
+  if(t==='K'){ ncas[c+'K']=false; ncas[c+'Q']=false; }
+  if(t==='R'){ const{r,f}=rc(m.from); if(c==='w'&&r===7){if(f===7)ncas.wK=false;if(f===0)ncas.wQ=false;} if(c==='b'&&r===0){if(f===7)ncas.bK=false;if(f===0)ncas.bQ=false;} }
+  if(m.to===idx(7,7))ncas.wK=false; if(m.to===idx(7,0))ncas.wQ=false;
+  if(m.to===idx(0,7))ncas.bK=false; if(m.to===idx(0,0))ncas.bQ=false;
+  return {nb, nep, ncas};
+}
+
+// ── PDC move generation ───────────────────────────────────────────────────────
+// Generates moves legal under PDC rules for piece at i, then filters out moves leaving own king in check
+function pdcMovesFrom(b, i, ep, cas){
+  const p=b[i]; if(!p) return [];
+  const c=clr(p), t=typ(p), {r,f}=rc(i);
+  const raw=[];
+  const add=(to,flags={})=>raw.push({from:i,to,...flags});
+  const chks=getCheckers(b,c);
+
+  if(t==='P'){
+    const d=c==='w'?-1:1, sr=c==='w'?6:1, n1=idx(r+d,f);
+    if(inB(r+d,f)&&!b[n1]) add(n1);
+    if(r===sr&&!b[n1]&&!b[idx(r+d*2,f)]) add(idx(r+d*2,f),{dp:true});
+    [-1,1].forEach(df=>{
+      if(!inB(r+d,f+df)) return;
+      const ni=idx(r+d,f+df);
+      if(b[ni]&&clr(b[ni])!==c){
+        if(typ(b[ni])==='P') add(ni,{cap:true});
+        if(typ(b[ni])==='N'&&CENTER.has(ni)) add(ni,{cap:true});
+      }
+      if(ep===ni) add(ni,{cap:true,ep:true});
+    });
+  }
+  else if(t==='N'){
+    [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,df])=>{
+      if(!inB(r+dr,f+df)) return;
+      const ni=idx(r+dr,f+df);
+      if(!b[ni]) add(ni);
+      else if(clr(b[ni])!==c && chks.includes(ni)) add(ni,{cap:true});
+    });
+  }
+  else if(t==='B'){
+    [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,df])=>{
+      let nr=r+dr,nf=f+df;
+      while(inB(nr,nf)){ const ni=idx(nr,nf); if(b[ni]) break; add(ni); nr+=dr; nf+=df; }
+    });
+  }
+  else if(t==='R'){
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{
+      let nr=r+dr,nf=f+df,d=0;
+      while(inB(nr,nf)){
+        d++; const ni=idx(nr,nf);
+        if(b[ni]){ if(clr(b[ni])!==c&&d<=3) add(ni,{cap:true}); break; }
+        add(ni); nr+=dr; nf+=df;
+      }
+    });
+  }
+  else if(t==='Q'){
+    [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{
+      let nr=r+dr,nf=f+df;
+      while(inB(nr,nf)){
+        const ni=idx(nr,nf);
+        if(b[ni]){ if(clr(b[ni])!==c) add(ni,{cap:true}); break; }
+        add(ni); nr+=dr; nf+=df;
+      }
+    });
+  }
+  else if(t==='K'){
+    const atk=attackedByColor(b,opp(c));
+    const curInCheck=isInCheck(b,c);
+    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,df])=>{
+      if(!inB(r+dr,f+df)) return;
+      const ni=idx(r+dr,f+df);
+      if(clr(b[ni])===c) return;
+      // King can only capture when NOT currently in check
+      if(b[ni] && curInCheck) return;
+      add(ni, b[ni]?{cap:true}:{});
+    });
+    if(!isInCheck(b,c)){
+      if(c==='w'&&r===7&&f===4){
+        const atk=attackedByColor(b,'b');
+        if(cas.wK&&!b[idx(7,5)]&&!b[idx(7,6)]&&!atk.has(idx(7,5))&&!atk.has(idx(7,6))) add(idx(7,6),{castle:'K'});
+        if(cas.wQ&&!b[idx(7,3)]&&!b[idx(7,2)]&&!b[idx(7,1)]&&!atk.has(idx(7,3))&&!atk.has(idx(7,2))) add(idx(7,2),{castle:'Q'});
+      }
+      if(c==='b'&&r===0&&f===4){
+        const atk=attackedByColor(b,'w');
+        if(cas.bK&&!b[idx(0,5)]&&!b[idx(0,6)]&&!atk.has(idx(0,5))&&!atk.has(idx(0,6))) add(idx(0,6),{castle:'K'});
+        if(cas.bQ&&!b[idx(0,3)]&&!b[idx(0,2)]&&!b[idx(0,1)]&&!atk.has(idx(0,3))&&!atk.has(idx(0,2))) add(idx(0,2),{castle:'Q'});
+      }
+    }
+  }
+
+  return raw.filter(m=>{ const{nb}=applyMove(b,m,cas); return !isInCheck(nb,c); });
+}
+
+function allPDCMoves(b,c,ep,cas){
+  const all=[];
+  for(let i=0;i<64;i++) if(clr(b[i])===c) pdcMovesFrom(b,i,ep,cas).forEach(m=>all.push(m));
+  return all;
+}
+
+// Standard chess legal moves (ignores PDC capture restrictions) — used for M1 detection
+function allStdMoves(b,c,ep,cas){
+  const all=[];
+  for(let i=0;i<64;i++){
+    if(clr(b[i])!==c) continue;
+    const p=b[i],t=typ(p),{r,f}=rc(i);
+    const try1=(to,flags={})=>{ const m={from:i,to,...flags}; const{nb}=applyMove(b,m,cas); if(!isInCheck(nb,c)) all.push(m); };
+    if(t==='P'){
+      const d=c==='w'?-1:1,sr=c==='w'?6:1,n1=idx(r+d,f);
+      if(inB(r+d,f)&&!b[n1]){ try1(n1); if(r===sr&&!b[idx(r+d*2,f)]) try1(idx(r+d*2,f),{dp:true}); }
+      [-1,1].forEach(df=>{ if(!inB(r+d,f+df))return; const ni=idx(r+d,f+df); if(b[ni]&&clr(b[ni])!==c)try1(ni,{cap:true}); if(ep===ni)try1(ni,{cap:true,ep:true}); });
+    } else if(t==='N'){
+      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,df])=>{ if(!inB(r+dr,f+df))return; const ni=idx(r+dr,f+df); if(!b[ni]||clr(b[ni])!==c) try1(ni,{cap:!!b[ni]}); });
+    } else if(t==='B'||t==='R'||t==='Q'){
+      const dirs=t==='B'?[[-1,-1],[-1,1],[1,-1],[1,1]]:t==='R'?[[-1,0],[1,0],[0,-1],[0,1]]:[[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+      dirs.forEach(([dr,df])=>{ let nr=r+dr,nf=f+df; while(inB(nr,nf)){ const ni=idx(nr,nf); if(b[ni]){if(clr(b[ni])!==c)try1(ni,{cap:true});break;} try1(ni); nr+=dr;nf+=df; } });
+    } else if(t==='K'){
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,df])=>{ if(!inB(r+dr,f+df))return; const ni=idx(r+dr,f+df); if(!b[ni]||clr(b[ni])!==c) try1(ni,{cap:!!b[ni]}); });
+      if(c==='w'&&r===7&&f===4){ if(cas.wK&&!b[idx(7,5)]&&!b[idx(7,6)])try1(idx(7,6),{castle:'K'}); if(cas.wQ&&!b[idx(7,3)]&&!b[idx(7,2)]&&!b[idx(7,1)])try1(idx(7,2),{castle:'Q'}); }
+      if(c==='b'&&r===0&&f===4){ if(cas.bK&&!b[idx(0,5)]&&!b[idx(0,6)])try1(idx(0,6),{castle:'K'}); if(cas.bQ&&!b[idx(0,3)]&&!b[idx(0,2)]&&!b[idx(0,1)])try1(idx(0,2),{castle:'Q'}); }
+    }
+  }
+  return all;
+}
+
+// ── Must calculation ──────────────────────────────────────────────────────────
+function getMusts(b,c,ep,cas){
+  const chks=getCheckers(b,c);
+  const isChk=chks.length>0;
+  const musts=[];
+
+  if(isChk) musts.push({kind:'king-check'});
+
+  for(let i=0;i<64;i++){
+    if(clr(b[i])!==c) continue;
+    const t=typ(b[i]), {r,f}=rc(i);
+
+    if(t==='R'){
+      [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{
+        for(let d=1;d<=3;d++){
+          const nr=r+dr*d,nf=f+df*d; if(!inB(nr,nf)) break;
+          const ni=idx(nr,nf);
+          if(b[ni]){ if(clr(b[ni])!==c) musts.push({kind:'rook-cap',from:i,to:ni}); break; }
+        }
+      });
+    }
+
+    if(t==='B'){
+      const oppKi=kingIdx(b,opp(c));
+      [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,df])=>{
+        let nr=r+dr,nf=f+df;
+        while(inB(nr,nf)){
+          const ni=idx(nr,nf); if(b[ni]) break;
+          const nb2=[...b]; nb2[i]=null; nb2[ni]=c+'B';
+          if(rawAttacks(nb2,ni).includes(oppKi)) musts.push({kind:'bishop-check',from:i,to:ni});
+          nr+=dr; nf+=df;
+        }
+      });
+    }
+
+    if(t==='Q'){
+      [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{
+        let nr=r+dr,nf=f+df;
+        while(inB(nr,nf)){
+          const ni=idx(nr,nf);
+          if(b[ni]){ if(clr(b[ni])!==c&&typ(b[ni])!=='N') musts.push({kind:'queen-cap',from:i,to:ni}); break; }
+          nr+=dr; nf+=df;
+        }
+      });
+    }
+  }
+  return musts;
+}
+
+// ── M1 detection ──────────────────────────────────────────────────────────────
+// Is the opponent in a PDC losing state (ignoring M1 response)?
+function isLosingForOpp(b, oppC, ep, cas){
+  const chks=getCheckers(b,oppC);
+  const isChk=chks.length>0;
+  const musts=getMusts(b,oppC,ep,cas);
+  const pdcMoves=allPDCMoves(b,oppC,ep,cas);
+  if(pdcMoves.length===0&&isChk) return true;
+  if(isChk&&musts.filter(m=>m.kind==='bishop-check').length>0) return true;
+  if(isChk&&musts.filter(m=>m.kind==='queen-cap').length>0) return true;
+  if(musts.length>=2) return true;
+  // Queen-takes-checker precedence: if in check, queen can take checker,
+  // but there's another must too — king can't move, queen is tied to checker = loss
+  if(isChk){
+    const queenCanTakeChecker=chks.some(ci=>{
+      for(let qi=0;qi<64;qi++){
+        if(b[qi]===oppC+'Q'&&rawAttacks(b,qi).includes(ci)) return true;
+      }
+      return false;
+    });
+    if(queenCanTakeChecker&&musts.some(m=>m.kind!=='king-check')) return true;
+  }
+  return false;
+}
+
+function canM1Save(b,c,ep,cas){
+  for(const m of allStdMoves(b,c,ep,cas)){
+    const{nb,nep,ncas}=applyMove(b,m,cas);
+    if(isLosingForOpp(nb,opp(c),nep,ncas)) return true;
+  }
+  return false;
+}
+
+// ── Evaluate position ─────────────────────────────────────────────────────────
+function evaluate(b,c,ep,cas){
+  const chks=getCheckers(b,c);
+  const isChk=chks.length>0;
+  const musts=getMusts(b,c,ep,cas);
+  const pdcMoves=allPDCMoves(b,c,ep,cas);
+
+  // Standard checkmate / stalemate
+  if(pdcMoves.length===0){ return isChk?{result:'checkmate',winner:opp(c),reason:'No legal moves'}:{result:'stalemate'}; }
+
+  // Bishop checkmate: must check but king is in check
+  if(isChk&&musts.some(m=>m.kind==='bishop-check')){
+    if(canM1Save(b,c,ep,cas)) return{result:'ongoing',musts,pdcMoves,isChk};
+    return{result:'checkmate',winner:opp(c),reason:'Bishop must check but king is in check'};
+  }
+
+  // Queen checkmate: must capture but king is in check
+  if(isChk&&musts.some(m=>m.kind==='queen-cap')){
+    if(canM1Save(b,c,ep,cas)) return{result:'ongoing',musts,pdcMoves,isChk};
+    return{result:'checkmate',winner:opp(c),reason:'Queen must capture but king is in check'};
+  }
+
+  // Double must
+  if(musts.length>=2){
+    if(canM1Save(b,c,ep,cas)) return{result:'ongoing',musts,pdcMoves,isChk};
+    return{result:'double-must',winner:opp(c)};
+  }
+
+  // 2-move repetition
+  const key=posKey(b,c,ep,cas);
+  if(posHist.filter(k=>k===key).length>=2) return{result:'draw',reason:'2-move repetition'};
+
+  // Insufficient material
+  const ps=b.filter(Boolean);
+  if(ps.length===2||(ps.length===3&&ps.some(p=>typ(p)==='B'||typ(p)==='N'))) return{result:'draw',reason:'Insufficient material'};
+
+  // 15-move space win (checked after move in doMove)
+  return{result:'ongoing',musts,pdcMoves,isChk};
+}
+
+function posKey(b,c,ep,cas){ return b.join(',')+':'+c+':'+(ep??-1)+':'+(cas.wK?1:0)+(cas.wQ?1:0)+(cas.bK?1:0)+(cas.bQ?1:0); }
+
+
+
+// ── Space ─────────────────────────────────────────────────────────────────────
+function calcSpace(b,c){
+  const oppRows=c==='w'?[0,1,2,3]:[4,5,6,7];
+  const inOpp=r=>oppRows.includes(r);
+  const scored=new Set();
+  const chkSet=new Set(getCheckers(b,c));
+
+  for(let i=0;i<64;i++){
+    if(clr(b[i])!==c) continue;
+    const t=typ(b[i]),{r,f}=rc(i);
+    if(inOpp(r)) scored.add('piece:'+i);
+    if(t==='P'){
+      const d=c==='w'?-1:1;
+      [-1,1].forEach(df=>{ const nr=r+d,nf=f+df; if(!inB(nr,nf)||!inOpp(nr))return; const ni=idx(nr,nf); if(!b[ni]||(clr(b[ni])!==c&&(typ(b[ni])==='P'||(typ(b[ni])==='N'&&CENTER.has(ni))))) scored.add(ni); });
+    } else if(t==='N'){
+      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,df])=>{ const nr=r+dr,nf=f+df; if(!inB(nr,nf)||!inOpp(nr))return; const ni=idx(nr,nf); if(!b[ni]||chkSet.has(ni)) scored.add(ni); });
+    } else if(t==='B'){
+      [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,df])=>{ let nr=r+dr,nf=f+df; while(inB(nr,nf)){ const ni=idx(nr,nf); if(b[ni])break; if(inOpp(nr))scored.add(ni); nr+=dr;nf+=df; } });
+    } else if(t==='R'){
+      [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{ for(let d=1;d<=3;d++){ const nr=r+dr*d,nf=f+df*d; if(!inB(nr,nf))break; const ni=idx(nr,nf); if(b[ni]){if(clr(b[ni])!==c&&inOpp(nr))scored.add(ni);break;} if(inOpp(nr))scored.add(ni); } });
+    } else if(t==='Q'){
+      [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,df])=>{ let nr=r+dr,nf=f+df; while(inB(nr,nf)){ const ni=idx(nr,nf); if(b[ni]){if(clr(b[ni])!==c&&inOpp(nr))scored.add(ni);break;} if(inOpp(nr))scored.add(ni); nr+=dr;nf+=df; } });
+    } else if(t==='K'){
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,df])=>{ const nr=r+dr,nf=f+df; if(!inB(nr,nf)||!inOpp(nr))return; const ni=idx(nr,nf); if(!b[ni]) scored.add(ni); });
+    }
+  }
+
+  // +1 per piece attacking the enemy king
+  const oppKi=kingIdx(b,opp(c));
+  if(oppKi>=0){
+    for(let i=0;i<64;i++){
+      if(clr(b[i])===c && rawAttacks(b,i).includes(oppKi)) scored.add('king-atk:'+i);
+    }
+  }
+
+  return scored.size;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  const el=document.getElementById('board'); el.innerHTML='';
+  const isChk=isInCheck(board,turn), ki=kingIdx(board,turn);
+  for(let r=0;r<8;r++) for(let f=0;f<8;f++){
+    const i=idx(r,f);
+    const sq=document.createElement('div');
+    sq.className='sq '+((r+f)%2===0?'light':'dark');
+    if(lastMove){ if(lastMove.from===i) sq.classList.add('last-from'); if(lastMove.to===i) sq.classList.add('last-to'); }
+    if(isChk&&i===ki) sq.classList.add('king-check');
+    if(sel===i) sq.classList.add('selected');
+    if(hilights.some(m=>m.to===i)){
+      const m=hilights.find(m=>m.to===i);
+      const dot=document.createElement('div');
+      dot.className=(board[i]&&clr(board[i])!==turn)||m.ep?'cap-ring':'dot';
+      sq.appendChild(dot);
+    }
+    if(board[i]){ const pe=document.createElement('div'); pe.className='piece'; pe.textContent=GLYPHS[board[i]]; sq.appendChild(pe); }
+    sq.addEventListener('click',()=>onClick(i));
+    el.appendChild(sq);
+  }
+}
+
+function updateUI(){
+  document.getElementById('tdot').className='tdot '+(turn==='w'?'w':'b');
+  document.getElementById('ttext').textContent=(turn==='w'?'White':'Black')+' to move';
+  const musts=getMusts(board,turn,epSq,castling);
+  const mustEl=document.getElementById('must-list');
+  mustEl.innerHTML=musts.length===0?'None':musts.map(m=>{
+    if(m.kind==='king-check') return '⚡ King must move';
+    const{r:fr,f:ff}=rc(m.from),{r:tr,f:tf}=rc(m.to);
+    return `⚡ ${board[m.from]} ${sqN(fr,ff)}→${sqN(tr,tf)}`;
+  }).join('<br>');
+  document.getElementById('nocap').textContent=noCapCount;
+  const ws=calcSpace(board,'w'),bs=calcSpace(board,'b');
+  document.getElementById('ws').textContent=ws; document.getElementById('bs').textContent=bs;
+  document.getElementById('wbar').style.width=(ws/(ws+bs||1)*100)+'%';
+  const logEl=document.getElementById('log');
+  logEl.innerHTML=moveLog.slice(-40).map((e,i)=>i%2===0?`<span style="color:var(--muted)">${Math.floor(i/2)+1}.</span> <span>${e}</span>`:`<span>${e}</span><br>`).join(' ');
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+function setStatus(msg,cls=''){ const el=document.getElementById('status'); el.textContent=msg; el.className='status '+(cls||''); }
+
+// Does move m violate any current must?
+function violatesMusts(m){
+  const musts=getMusts(board,turn,epSq,castling);
+  const isChk=musts.some(x=>x.kind==='king-check');
+
+  // Special rule: if queen can capture the checking piece, king cannot move
+  // (queen capturing checker takes precedence over king move, even for knights)
+  if(isChk && typ(board[m.from])==='K'){
+    const chks=getCheckers(board,turn);
+    for(const ci of chks){
+      // Can our queen reach this checker?
+      for(let qi=0;qi<64;qi++){
+        if(board[qi]===turn+'Q'){
+          const qAtks=rawAttacks(board,qi);
+          if(qAtks.includes(ci)){
+            // Queen can take the checker — king move is illegal (unless M1, checked at call site)
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  if(musts.length===0) return false;
+
+  for(const must of musts){
+    if(must.kind==='king-check'){
+      const{nb}=applyMove(board,m,castling);
+      if(isInCheck(nb,turn)) return true;
+    } else {
+      if(!(m.from===must.from&&m.to===must.to)) return true;
+    }
+  }
+  return false;
+}
+
+// ── Click handler ─────────────────────────────────────────────────────────────
+function onClick(i){
+  if(gameOver) return;
+
+  // Clicking a highlighted destination
+  if(sel!==null&&hilights.some(m=>m.to===i)){
+    const m=hilights.find(m=>m.to===i);
+    // Check must violation at the moment of playing
+    if(violatesMusts(m)){
+      // Only allowed if it's M1 in PDC for the opponent right now
+      const{nb,nep,ncas}=applyMove(board,m,castling);
+      if(isLosingForOpp(nb,opp(turn),nep,ncas)){
+        doMove(m); // M1 special rule — allowed
+      } else {
+        setStatus('⚡ Illegal — violates a must. Play the forced move or find M1.','warn');
+      }
+      return;
+    }
+    doMove(m); return;
+  }
+
+  // Clicking own piece — show only actually playable moves
+  if(board[i]&&clr(board[i])===turn){
+    const musts=getMusts(board,turn,epSq,castling);
+    const candidates = musts.length>0
+      ? allStdMoves(board,turn,epSq,castling).filter(m=>m.from===i)
+      : allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===i);
+    // Keep move if it doesn't violate musts, OR if it's M1
+    const moves=candidates.filter(m=>{
+      if(!violatesMusts(m)) return true;
+      const{nb,nep,ncas}=applyMove(board,m,castling);
+      return isLosingForOpp(nb,opp(turn),nep,ncas);
+    });
+    sel=i; hilights=moves; render();
+    setStatus('Selected '+board[i]+' at '+sqN(rc(i).r,rc(i).f)+(musts.length>0?' — musts active':''));
+    return;
+  }
+
+  sel=null; hilights=[]; render();
+}
+
+// ── Execute move ──────────────────────────────────────────────────────────────
+async function doMove(m){
+  if(typ(board[m.from])==='P'){
+    const{r}=rc(m.to);
+    if((clr(board[m.from])==='w'&&r===0)||(clr(board[m.from])==='b'&&r===7))
+      m.promo=await askPromo(clr(board[m.from]));
+  }
+
+  const wasCap=!!m.cap;
+  const{nb,nep,ncas}=applyMove(board,m,castling);
+  const{r:fr,f:ff}=rc(m.from),{r:tr,f:tf}=rc(m.to);
+  let note=m.castle?('O-O'+(m.castle==='Q'?'-O':'')):(sqN(fr,ff)+(wasCap?'x':'-')+sqN(tr,tf)+(m.promo?'='+m.promo:''));
+  moveLog.push(note);
+
+  lastMove={from:m.from,to:m.to};
+  board=nb; epSq=nep; castling=ncas;
+  noCapCount=wasCap?0:noCapCount+1;
+  posHist.push(posKey(board,turn,epSq,castling));
+
+  // 15-move space win check
+  if(noCapCount>=15){
+    const ws=calcSpace(board,'w'),bs=calcSpace(board,'b');
+    if(ws!==bs){ endGame(ws>bs?'w':'b','15-move space win'); return; }
+  }
+
+  turn=opp(turn);
+  sel=null; hilights=[];
+
+  const ev=evaluate(board,turn,epSq,castling);
+  if(ev.result==='checkmate'){ endGame(ev.winner,'Checkmate — '+ev.reason); return; }
+  if(ev.result==='stalemate'){ endGame(null,'Stalemate'); return; }
+  if(ev.result==='double-must'){ endGame(ev.winner,'Double-must loss'); return; }
+  if(ev.result==='draw'){ endGame(null,'Draw: '+ev.reason); return; }
+
+  if(ev.isChk) setStatus((turn==='w'?'White':'Black')+' is in check!','warn');
+  else if(ev.musts&&ev.musts.length>0) setStatus('⚡ Musts active — play forced move or find M1.','warn');
+  else setStatus('');
+
+  render(); updateUI();
+}
+
+function endGame(winner,reason){
+  gameOver=true;
+  setStatus(winner?(winner==='w'?'White':'Black')+' wins! '+reason:'Draw — '+reason, winner?'ok':'');
+  sel=null; hilights=[]; render(); updateUI();
+}
+
+function askPromo(c){
+  return new Promise(res=>{
+    const ov=document.getElementById('promo-overlay'), pp=document.getElementById('promo-pieces');
+    pp.innerHTML='';
+    ['Q','R','B','N'].forEach(t=>{ const el=document.createElement('div'); el.className='promo-piece'; el.textContent=GLYPHS[c+t]; el.onclick=()=>{ov.classList.add('hidden');res(t);}; pp.appendChild(el); });
+    ov.classList.remove('hidden');
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+// (boot handled by multiplayer init below)
+</script>
+<script>
+// ── Firebase config ───────────────────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey: "AIzaSyDQ-pGKot5lj2uZLnsKfodNvjg8uBkqTpw",
+  authDomain: "pdc-chess.firebaseapp.com",
+  databaseURL: "https://pdc-chess-default-rtdb.firebaseio.com",
+  projectId: "pdc-chess",
+  storageBucket: "pdc-chess.firebasestorage.app",
+  messagingSenderId: "535287918297",
+  appId: "1:535287918297:web:03bcf8e28489febbe198c8"
+});
+const db = firebase.database();
+
+// ── Multiplayer state ─────────────────────────────────────────────────────────
+let myColor = null;      // 'w' or 'b'
+let gameCode = null;
+let gameRef = null;
+let clockInterval = null;
+let clockTimes = {w:300, b:300};
+let clockEnabled = true;
+let premove = null;      // {from, to} queued premove
+let lastServerState = null;
+
+// ── Lobby ─────────────────────────────────────────────────────────────────────
+function randCode(){ return Math.random().toString(36).substring(2,8).toUpperCase(); }
+
+function lobbyStatus(msg){ document.getElementById('lobby-status').textContent=msg; }
+
+async function createGame(){
+  const clockSecs = parseInt(document.getElementById('clock-sel').value);
+  clockEnabled = clockSecs > 0;
+  clockTimes = {w:clockSecs, b:clockSecs};
+  gameCode = randCode();
+  gameRef = db.ref('games/'+gameCode);
+
+  const initState = buildStateObj();
+  initState.clockW = clockSecs;
+  initState.clockB = clockSecs;
+  initState.clockEnabled = clockEnabled;
+  initState.clockLastTick = Date.now();
+  initState.players = {w: true};
+  initState.status = 'waiting';
+
+  await gameRef.set(initState);
+  myColor = 'w';
+
+  document.getElementById('lobby-main').classList.add('hidden');
+  document.getElementById('lobby-waiting').classList.remove('hidden');
+  document.getElementById('game-code-display').textContent = gameCode;
+
+  listenToGame();
+}
+
+async function joinGame(){
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if(!code){ lobbyStatus('Enter a game code.'); return; }
+  gameRef = db.ref('games/'+code);
+  const snap = await gameRef.once('value');
+  if(!snap.exists()){ lobbyStatus('Game not found.'); return; }
+  const data = snap.val();
+  if(data.status !== 'waiting'){ lobbyStatus('Game already started or finished.'); return; }
+
+  gameCode = code;
+  myColor = 'b';
+  clockEnabled = data.clockEnabled;
+  clockTimes = {w: data.clockW, b: data.clockB};
+
+  await gameRef.update({
+    'players/b': true,
+    status: 'playing',
+    clockLastTick: Date.now()
+  });
+
+  document.getElementById('lobby').classList.add('hidden');
+  listenToGame();
+  startLocalRender();
+}
+
+function listenToGame(){
+  gameRef.on('value', snap=>{
+    if(!snap.exists()) return;
+    const data = snap.val();
+
+    // If opponent just joined, hide lobby
+    if(myColor==='w' && data.status==='playing' && document.getElementById('lobby').style.display!=='none'){
+      document.getElementById('lobby').classList.add('hidden');
+      startLocalRender();
+    }
+
+    // Sync game state from Firebase
+    if(data.status==='playing' || data.status==='over'){
+      applyServerState(data);
+    }
+  });
+}
+
+function buildStateObj(){
+  return {
+    board: board.map(x=>x||''),
+    turn, castling, epSq: epSq??-1,
+    posHist: posHist.slice(-20), // keep last 20 for rep detection
+    moveLog,
+    noCapCount,
+    gameOver,
+    lastMoveFrom: lastMove?lastMove.from:-1,
+    lastMoveTo: lastMove?lastMove.to:-1,
+    status: gameOver?'over':'playing'
+  };
+}
+
+function applyServerState(data){
+  board = data.board.map(x=>x||null);
+  turn = data.turn;
+  castling = data.castling;
+  epSq = data.epSq===-1?null:data.epSq;
+  posHist = data.posHist||[];
+  moveLog = data.moveLog||[];
+  noCapCount = data.noCapCount||0;
+  gameOver = data.gameOver||false;
+  lastMove = data.lastMoveFrom>=0?{from:data.lastMoveFrom,to:data.lastMoveTo}:null;
+  if(data.clockW!==undefined) clockTimes.w = data.clockW;
+  if(data.clockB!==undefined) clockTimes.b = data.clockB;
+  lastServerState = data;
+
+  render(); updateUI(); updateClockDisplay();
+
+  // Execute premove if it's now our turn
+  if(premove && turn===myColor && !gameOver){
+    const pm = premove; premove = null;
+    document.getElementById('premove-indicator').textContent='';
+    // Validate premove is still legal
+    const musts=getMusts(board,turn,epSq,castling);
+    const candidates = musts.length>0
+      ? allStdMoves(board,turn,epSq,castling)
+      : allPDCMoves(board,turn,epSq,castling);
+    const m = candidates.find(x=>x.from===pm.from&&x.to===pm.to);
+    if(m && !violatesMusts(m)){
+      setTimeout(()=>doMove(m),100);
+    } else if(m){
+      const{nb,nep,ncas}=applyMove(board,m,castling);
+      if(isLosingForOpp(nb,opp(turn),nep,ncas)) setTimeout(()=>doMove(m),100);
+    }
+  }
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function startLocalRender(){
+  document.getElementById('role-badge').textContent = myColor==='w'?'You are White':'You are Black';
+  updateClockDisplay();
+  if(clockEnabled){
+    clearInterval(clockInterval);
+    clockInterval = setInterval(tickClock, 200);
+  }
+}
+
+function tickClock(){
+  if(!lastServerState||gameOver||lastServerState.status!=='playing') return;
+  // Estimate time elapsed since last server tick
+  const elapsed = (Date.now() - (lastServerState.clockLastTick||Date.now())) / 1000;
+  const wt = Math.max(0, (lastServerState.clockW||0) - (turn==='w'?elapsed:0));
+  const bt = Math.max(0, (lastServerState.clockB||0) - (turn==='b'?elapsed:0));
+  clockTimes = {w:wt, b:bt};
+  updateClockDisplay();
+  // Flag timeout locally (server will confirm)
+  if(turn===myColor && clockTimes[myColor]<=0){
+    clearInterval(clockInterval);
+    endGame(opp(myColor),'Out of time');
+  }
+}
+
+function updateClockDisplay(){
+  ['w','b'].forEach(c=>{
+    const el=document.getElementById('clock-'+c);
+    const t=clockTimes[c]??0;
+    const m=Math.floor(t/60), s=Math.floor(t%60);
+    el.textContent=(clockEnabled?(m+':'+(s<10?'0':'')+s):'∞');
+    el.className='clock'+(turn===c&&!gameOver?' active':'')+(t<30&&clockEnabled?' low':'');
+  });
+}
+
+// ── Override onClick for multiplayer ─────────────────────────────────────────
+function onClick(i){
+  if(gameOver) return;
+
+  // Premove: if it's not our turn, queue a premove
+  if(turn !== myColor){
+    handlePremove(i); return;
+  }
+
+  // Clicking a highlighted destination
+  if(sel!==null&&hilights.some(m=>m.to===i)){
+    const m=hilights.find(m=>m.to===i);
+    if(violatesMusts(m)){
+      const{nb,nep,ncas}=applyMove(board,m,castling);
+      if(isLosingForOpp(nb,opp(turn),nep,ncas)){
+        doMove(m);
+      } else {
+        setStatus('⚡ Illegal — violates a must. Play forced move or find M1.','warn');
+      }
+      return;
+    }
+    doMove(m); return;
+  }
+
+  // Clicking own piece
+  if(board[i]&&clr(board[i])===turn){
+    const musts=getMusts(board,turn,epSq,castling);
+    const candidates = musts.length>0
+      ? allStdMoves(board,turn,epSq,castling).filter(m=>m.from===i)
+      : allPDCMoves(board,turn,epSq,castling).filter(m=>m.from===i);
+    const moves=candidates.filter(m=>{
+      if(!violatesMusts(m)) return true;
+      const{nb,nep,ncas}=applyMove(board,m,castling);
+      return isLosingForOpp(nb,opp(turn),nep,ncas);
+    });
+    sel=i; hilights=moves; render();
+    setStatus('Selected '+board[i]+' at '+sqN(rc(i).r,rc(i).f)+(musts.length>0?' — musts active':''));
+    return;
+  }
+
+  sel=null; hilights=[]; render();
+}
+
+// ── Premove ───────────────────────────────────────────────────────────────────
+let premoveSel = null;
+function handlePremove(i){
+  if(premoveSel!==null){
+    // Second click — set premove destination
+    if(board[premoveSel]&&clr(board[premoveSel])===myColor){
+      premove = {from:premoveSel, to:i};
+      document.getElementById('premove-indicator').textContent=
+        '⏳ Premove: '+sqN(rc(premoveSel).r,rc(premoveSel).f)+'→'+sqN(rc(i).r,rc(i).f);
+      premoveSel=null; sel=null; hilights=[]; render(); return;
+    }
+  }
+  if(board[i]&&clr(board[i])===myColor){
+    premoveSel=i; sel=i;
+    // Show all std moves as premove hints
+    hilights=allStdMoves(board,myColor,epSq,castling).filter(m=>m.from===i);
+    render();
+    setStatus('Premove selected — click destination','warn');
+    return;
+  }
+  premoveSel=null; sel=null; hilights=[]; render();
+}
+
+// ── Override doMove for multiplayer ──────────────────────────────────────────
+async function doMove(m){
+  if(turn!==myColor&&!premove) return; // not our turn
+
+  if(typ(board[m.from])==='P'){
+    const{r}=rc(m.to);
+    if((clr(board[m.from])==='w'&&r===0)||(clr(board[m.from])==='b'&&r===7))
+      m.promo=await askPromo(clr(board[m.from]));
+  }
+
+  const wasCap=!!m.cap;
+  const{nb,nep,ncas}=applyMove(board,m,castling);
+  const{r:fr,f:ff}=rc(m.from),{r:tr,f:tf}=rc(m.to);
+  let note=m.castle?('O-O'+(m.castle==='Q'?'-O':'')):(sqN(fr,ff)+(wasCap?'x':'-')+sqN(tr,tf)+(m.promo?'='+m.promo:''));
+
+  const newMoveLog=[...moveLog, note];
+  const newNoCapCount=wasCap?0:noCapCount+1;
+  const newTurn=opp(turn);
+  const newPosHist=[...posHist.slice(-19), posKey(nb,newTurn,nep,ncas)];
+
+  // Check game end
+  let newGameOver=false, endReason='', endWinner=null;
+  const ev=evaluate(nb,newTurn,nep,ncas);
+  if(ev.result==='checkmate'){newGameOver=true;endWinner=ev.winner;endReason='Checkmate — '+ev.reason;}
+  else if(ev.result==='stalemate'){newGameOver=true;endReason='Stalemate';}
+  else if(ev.result==='double-must'){newGameOver=true;endWinner=ev.winner;endReason='Double-must loss';}
+  else if(ev.result==='draw'){newGameOver=true;endReason='Draw: '+ev.reason;}
+  else if(newNoCapCount>=15){
+    const ws=calcSpace(nb,'w'),bs=calcSpace(nb,'b');
+    if(ws!==bs){newGameOver=true;endWinner=ws>bs?'w':'b';endReason='15-move space win';}
+  }
+
+  // Clock: save remaining time
+  const elapsed=(Date.now()-(lastServerState?.clockLastTick||Date.now()))/1000;
+  const newClockW=turn==='w'?Math.max(0,(lastServerState?.clockW||clockTimes.w)-elapsed):clockTimes.w;
+  const newClockB=turn==='b'?Math.max(0,(lastServerState?.clockB||clockTimes.b)-elapsed):clockTimes.b;
+
+  // Push to Firebase
+  const update={
+    board: nb.map(x=>x||''),
+    turn: newTurn,
+    castling: ncas,
+    epSq: nep??-1,
+    posHist: newPosHist,
+    moveLog: newMoveLog,
+    noCapCount: newNoCapCount,
+    gameOver: newGameOver,
+    lastMoveFrom: m.from,
+    lastMoveTo: m.to,
+    clockW: newClockW,
+    clockB: newClockB,
+    clockLastTick: Date.now(),
+    status: newGameOver?'over':'playing'
+  };
+
+  await gameRef.update(update);
+
+  if(newGameOver) endGame(endWinner, endReason);
+}
+
+function endGame(winner,reason){
+  gameOver=true;
+  clearInterval(clockInterval);
+  setStatus(winner?(winner==='w'?'White':'Black')+' wins! '+reason:'Draw — '+reason, winner?'ok':'');
+  sel=null; hilights=[]; render(); updateUI();
+}
+
+// Boot — show lobby, don't start local game
+resetGame(); // sets up board in memory
+</script>
+</body>
+</html>
