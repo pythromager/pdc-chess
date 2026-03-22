@@ -25,7 +25,7 @@
   .sq.king-check{background:var(--check)!important;}
   .sq .dot{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--valid);pointer-events:none;z-index:2;}
   .sq .cap-ring{position:absolute;width:64px;height:64px;border-radius:50%;border:4px solid var(--cap-ring);pointer-events:none;z-index:2;}
-  .piece{font-size:42px;line-height:1;z-index:3;position:relative;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));transition:transform .1s;}
+  .piece{font-size:44px;line-height:1;z-index:3;position:relative;transition:transform .1s;}
   .sq:hover .piece{transform:scale(1.08);}
   .panel{width:240px;display:flex;flex-direction:column;gap:12px;}
   .box{background:var(--surface);border:1px solid var(--border);padding:14px;border-radius:2px;}
@@ -73,7 +73,15 @@
   .clock-label{font-size:.55rem;color:var(--muted);margin-top:3px;letter-spacing:.1em;}
   .my-color{font-size:.6rem;color:var(--accent);text-align:center;margin-top:4px;letter-spacing:.15em;text-transform:uppercase;}
   .premove-label{font-size:.6rem;color:var(--must);margin-top:4px;min-height:14px;text-align:center;}
-  .hidden{display:none;}
+  .tc-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+  .tc-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.6rem;padding:5px 8px;cursor:pointer;transition:all .15s;flex:1;min-width:60px;}
+  .tc-btn:hover,.tc-btn.active{border-color:var(--accent);color:var(--accent);}
+  .tc-custom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+  .tc-field{display:flex;flex-direction:column;gap:3px;}
+  .tc-field label{font-size:.55rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+  .tc-field input{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.8rem;padding:5px;text-align:center;outline:none;width:100%;}
+  .tc-field input:focus{border-color:var(--accent);}
+  .tc-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}
 </style>
 </head>
 <body>
@@ -83,14 +91,31 @@
   <div class="lbox">
     <h2>Piece Disability Chess</h2>
     <div id="screen-home">
-      <div style="font-size:.6rem;color:var(--muted);margin-bottom:4px;">Time control</div>
-      <select id="clock-pick" style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit;padding:6px;width:100%;margin-bottom:16px;">
-        <option value="180">3 min</option>
-        <option value="300" selected>5 min</option>
-        <option value="600">10 min</option>
-        <option value="900">15 min</option>
-        <option value="0">No clock</option>
-      </select>
+      <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Time Control</div>
+      <div class="tc-presets" id="tc-presets">
+        <button class="tc-btn" onclick="setPreset(0,0)">No Clock</button>
+        <button class="tc-btn" onclick="setPreset(60,0)">1 min</button>
+        <button class="tc-btn" onclick="setPreset(60,1)">1+1</button>
+        <button class="tc-btn" onclick="setPreset(120,1)">2+1</button>
+        <button class="tc-btn active" onclick="setPreset(180,0)">3 min</button>
+        <button class="tc-btn" onclick="setPreset(180,2)">3+2</button>
+        <button class="tc-btn" onclick="setPreset(300,0)">5 min</button>
+        <button class="tc-btn" onclick="setPreset(300,3)">5+3</button>
+        <button class="tc-btn" onclick="setPreset(600,0)">10 min</button>
+        <button class="tc-btn" onclick="setPreset(600,5)">10+5</button>
+        <button class="tc-btn" onclick="setPreset(900,10)">15+10</button>
+        <button class="tc-btn" onclick="setPreset(1800,0)">30 min</button>
+      </div>
+      <div style="font-size:.6rem;color:var(--muted);margin-bottom:6px;text-align:left;letter-spacing:.1em;text-transform:uppercase;">Custom</div>
+      <div class="tc-custom">
+        <div class="tc-field"><label>Hours</label><input type="number" id="tc-h" min="0" max="9" value="0" oninput="clearPreset()"></div>
+        <div class="tc-field"><label>Min</label><input type="number" id="tc-m" min="0" max="59" value="3" oninput="clearPreset()"></div>
+        <div class="tc-field"><label>Sec</label><input type="number" id="tc-s" min="0" max="59" value="0" oninput="clearPreset()"></div>
+      </div>
+      <div class="tc-row">
+        <div class="tc-field"><label>Increment (sec)</label><input type="number" id="tc-inc" min="0" max="300" value="0" oninput="clearPreset()"></div>
+        <div class="tc-field"><label>Delay (sec)</label><input type="number" id="tc-del" min="0" max="60" value="0" oninput="clearPreset()"></div>
+      </div>
       <button class="lbtn" onclick="hostGame()">Create Game</button>
       <div class="ldiv">— or join with a code —</div>
       <input class="linput" id="code-input" placeholder="XXXXXX" maxlength="6" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')joinGame()">
@@ -129,6 +154,7 @@
       </div>
       <div class="my-color" id="my-color-label"></div>
       <div class="premove-label" id="premove-label"></div>
+      <div id="opp-online" style="font-size:.6rem;color:var(--muted);text-align:center;margin-top:4px;"></div>
     </div>
     <div class="box">
       <h3>Turn</h3>
@@ -207,10 +233,34 @@ function freshState(){
 }
 
 // ── Multiplayer state ─────────────────────────────────────────────────────────
-let myColor=null, gameRef=null, clockSecs=300, clockOn=true;
-let clockW=300, clockB=300, clockTickAt=null;
+let myColor=null, gameRef=null;
+let clockSecs=180, clockInc=0, clockDelay=0, clockOn=true;
+let clockW=180, clockB=180, clockTickAt=null;
 let clockInterval=null;
 let premovePending=null, premoveSel=null;
+let myPresenceRef=null;
+
+// ── Time control helpers ──────────────────────────────────────────────────────
+function setPreset(secs, inc){
+  clockSecs=secs; clockInc=inc; clockDelay=0; clockOn=secs>0;
+  document.getElementById('tc-h').value=Math.floor(secs/3600);
+  document.getElementById('tc-m').value=Math.floor((secs%3600)/60);
+  document.getElementById('tc-s').value=secs%60;
+  document.getElementById('tc-inc').value=inc;
+  document.getElementById('tc-del').value=0;
+  document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+function clearPreset(){ document.querySelectorAll('.tc-btn').forEach(b=>b.classList.remove('active')); }
+function readTC(){
+  const h=parseInt(document.getElementById('tc-h').value)||0;
+  const m=parseInt(document.getElementById('tc-m').value)||0;
+  const s=parseInt(document.getElementById('tc-s').value)||0;
+  const inc=parseInt(document.getElementById('tc-inc').value)||0;
+  const del=parseInt(document.getElementById('tc-del').value)||0;
+  const total=h*3600+m*60+s;
+  return{secs:total,inc,delay:del,on:total>0};
+}
 
 // ── Lobby ─────────────────────────────────────────────────────────────────────
 function lobbyErr(msg){document.getElementById('lobby-err').textContent=msg;}
@@ -222,28 +272,21 @@ function randCode(){
 }
 
 async function hostGame(){
-  clockSecs=parseInt(document.getElementById('clock-pick').value);
-  clockOn=clockSecs>0;
+  const tc=readTC();
+  clockSecs=tc.secs; clockInc=tc.inc; clockDelay=tc.delay; clockOn=tc.on;
   const code=randCode();
   const ref=db.ref('games/'+code);
   freshState();
   const snap=await ref.once('value');
-  if(snap.exists()){hostGame();return;} // retry if code collision
+  if(snap.exists()){hostGame();return;}
   await ref.set({
-    board:board.map(x=>x||''),
-    turn:'w',
-    castling,
-    ep:-1,
-    posHist:[],
-    moveLog:[],
-    noCapCount:0,
-    gameOver:false,
-    lastFrom:-1,lastTo:-1,
-    clockW:clockSecs,clockB:clockSecs,clockOn,clockTickAt:0,
-    host:'joined',guest:'waiting'
+    board:board.map(x=>x||''), turn:'w', castling, ep:-1,
+    posHist:[], moveLog:[], noCapCount:0, gameOver:false, lastFrom:-1, lastTo:-1,
+    clockW:tc.secs, clockB:tc.secs, clockInc:tc.inc, clockDelay:tc.delay, clockOn:tc.on,
+    clockTickAt:0, host:'joined', guest:'waiting', hostOnline:true, guestOnline:false
   });
-  myColor='w';
-  gameRef=ref;
+  myColor='w'; gameRef=ref;
+  setupPresence(ref,'host');
   document.getElementById('screen-home').classList.add('hidden');
   document.getElementById('screen-wait').classList.remove('hidden');
   document.getElementById('show-code').textContent=code;
@@ -258,17 +301,31 @@ async function joinGame(){
   if(!snap.exists()){lobbyErr('Game not found.');return;}
   const d=snap.val();
   if(d.guest==='joined'){lobbyErr('Game is full.');return;}
-  await ref.update({guest:'joined',clockTickAt:Date.now()});
-  myColor='b';
-  gameRef=ref;
-  freshState();
+  await ref.update({guest:'joined', guestOnline:true, clockTickAt:Date.now()});
+  myColor='b'; gameRef=ref; freshState();
+  clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
+  clockW=d.clockW; clockB=d.clockB;
+  setupPresence(ref,'guest');
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('my-color-label').textContent='You are Black';
-  clockSecs=d.clockW; clockOn=d.clockOn;
-  clockW=d.clockW; clockB=d.clockB;
   ref.on('value',onServerUpdate);
-  startClock();
-  render();updateUI();updateClocks();
+  startClock(); render();updateUI();updateClocks();
+}
+
+// ── Presence / disconnect detection ──────────────────────────────────────────
+function setupPresence(ref, role){
+  const onlineKey = role==='host' ? 'hostOnline' : 'guestOnline';
+  const presRef = ref.child(onlineKey);
+  presRef.set(true);
+  presRef.onDisconnect().set(false);
+  myPresenceRef = presRef;
+  // Watch opponent online status
+  const oppKey = role==='host' ? 'guestOnline' : 'hostOnline';
+  ref.child(oppKey).on('value', snap=>{
+    const online = snap.val();
+    const oppLabel = document.getElementById('opp-online');
+    if(oppLabel) oppLabel.textContent = online ? '🟢 Opponent online' : '🔴 Opponent disconnected';
+  });
 }
 
 // ── Firebase listener ─────────────────────────────────────────────────────────
@@ -281,32 +338,25 @@ function onServerUpdate(snap){
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('my-color-label').textContent='You are White';
     clockW=d.clockW; clockB=d.clockB;
+    clockInc=d.clockInc||0; clockDelay=d.clockDelay||0;
     freshState();
     startClock();
     render();updateUI();updateClocks();
   }
 
-  // Sync state when it's NOT our turn (opponent just moved)
+  // Sync state when it's opponent's move arriving (their turn just ended = now our turn)
   if(d.turn===myColor || d.gameOver){
     board=d.board.map(x=>x||null);
-    turn=d.turn;
-    castling=d.castling;
+    turn=d.turn; castling=d.castling;
     epSq=d.ep===-1?null:d.ep;
-    posHist=d.posHist||[];
-    moveLog=d.moveLog||[];
-    noCapCount=d.noCapCount||0;
-    gameOver=d.gameOver||false;
+    posHist=d.posHist||[]; moveLog=d.moveLog||[];
+    noCapCount=d.noCapCount||0; gameOver=d.gameOver||false;
     lastMove=d.lastFrom>=0?{from:d.lastFrom,to:d.lastTo}:null;
     clockW=d.clockW; clockB=d.clockB;
     clockTickAt=d.clockTickAt||Date.now();
     sel=null;hilights=[];
     render();updateUI();updateClocks();
-
-    if(gameOver){
-      clearInterval(clockInterval);
-    }
-
-    // Fire premove
+    if(gameOver) clearInterval(clockInterval);
     if(premovePending && turn===myColor && !gameOver){
       const pm=premovePending; premovePending=null;
       document.getElementById('premove-label').textContent='';
@@ -315,37 +365,36 @@ function onServerUpdate(snap){
   }
 }
 
-// ── Clock ─────────────────────────────────────────────────────────────────────
+// ── Clock (with increment and delay) ─────────────────────────────────────────
 function startClock(){
   clearInterval(clockInterval);
   if(!clockOn) return;
   clockInterval=setInterval(()=>{
     if(gameOver||!clockTickAt) return;
-    const elapsed=(Date.now()-clockTickAt)/1000;
+    const elapsed=Math.max(0,(Date.now()-clockTickAt)/1000 - clockDelay);
     const w=turn==='w'?Math.max(0,clockW-elapsed):clockW;
     const b=turn==='b'?Math.max(0,clockB-elapsed):clockB;
     showClock('cw',w,turn==='w');
     showClock('cb',b,turn==='b');
-    // Local timeout detection (only for our own clock)
-    if(turn===myColor&&(myColor==='w'?w:b)<=0){
-      clearInterval(clockInterval);
-      // Let server confirm — just show flag
-    }
-  },200);
+  },100);
 }
 
 function showClock(id,secs,active){
   const el=document.getElementById(id);
   if(!clockOn){el.textContent='∞';el.className='clock-time';return;}
-  const m=Math.floor(secs/60),s=Math.floor(secs%60);
-  el.textContent=m+':'+(s<10?'0':'')+s;
-  el.className='clock-time'+(active?' active':'')+(secs<30?' low':'');
+  const h=Math.floor(secs/3600);
+  const m=Math.floor((secs%3600)/60);
+  const s=Math.floor(secs%60);
+  el.textContent=h>0?h+':'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s:m+':'+(s<10?'0':'')+s;
+  el.className='clock-time'+(active?' active':'')+(secs<30&&secs>0?' low':'');
 }
 
 function updateClocks(){
   showClock('cw',clockW,turn==='w');
   showClock('cb',clockB,turn==='b');
 }
+
+
 
 // ── Chess logic (identical to single-player) ──────────────────────────────────
 function rawAttacks(b,i){
@@ -512,18 +561,54 @@ function calcSpace(b,c){
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
+// Piece images using inline SVG data URIs — white pieces are white fill/black stroke, black pieces are black fill/white stroke
+const PIECE_SVG = {
+  // Each piece is drawn as a styled Unicode char on a canvas
+};
+
+// We'll render pieces as styled divs with CSS — white pieces get white color + text-shadow, black pieces get dark color
+function pieceStyle(p){
+  if(!p) return '';
+  return clr(p)==='w'
+    ? 'color:#fff;text-shadow:0 0 3px #000,0 0 6px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000;'
+    : 'color:#111;text-shadow:0 0 3px #fff,0 0 5px #ccc,1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;';
+}
+
+// Use same Unicode but all white-side glyphs (hollow outlines) for both colors — style differentiates them
+const PIECE_CHAR = {wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',bK:'♔',bQ:'♕',bR:'♖',bB:'♗',bN:'♘',bP:'♙'};
+
 function render(){
   const el=document.getElementById('board');el.innerHTML='';
   const isChk=isInCheck(board,turn),ki=kingIdx(board,turn);
+  const flipped=myColor==='b';
+
+  // Update coord labels
+  const files=document.getElementById('coord-files');
+  if(files){
+    const labels=files.querySelectorAll('span');
+    ['a','b','c','d','e','f','g','h'].forEach((f,i)=>{if(labels[i])labels[i].textContent=flipped?['h','g','f','e','d','c','b','a'][i]:f;});
+  }
+  const ranks=document.querySelectorAll('.coord-rank');
+  if(ranks.length){
+    [8,7,6,5,4,3,2,1].forEach((n,i)=>{if(ranks[i])ranks[i].textContent=flipped?9-n:n;});
+  }
+
   for(let r=0;r<8;r++)for(let f=0;f<8;f++){
-    const i=idx(r,f);
+    const dr=flipped?7-r:r, df=flipped?7-f:f;
+    const i=idx(dr,df);
     const sq=document.createElement('div');
-    sq.className='sq '+((r+f)%2===0?'light':'dark');
+    sq.className='sq '+((dr+df)%2===0?'light':'dark');
     if(lastMove){if(lastMove.from===i)sq.classList.add('last-from');if(lastMove.to===i)sq.classList.add('last-to');}
     if(isChk&&i===ki)sq.classList.add('king-check');
     if(sel===i)sq.classList.add('selected');
     if(hilights.some(m=>m.to===i)){const m=hilights.find(m=>m.to===i);const dot=document.createElement('div');dot.className=(board[i]&&clr(board[i])!==turn)||m.ep?'cap-ring':'dot';sq.appendChild(dot);}
-    if(board[i]){const pe=document.createElement('div');pe.className='piece';pe.textContent=GLYPHS[board[i]];sq.appendChild(pe);}
+    if(board[i]){
+      const pe=document.createElement('div');
+      pe.className='piece';
+      pe.textContent=PIECE_CHAR[board[i]];
+      pe.style.cssText=pieceStyle(board[i]);
+      sq.appendChild(pe);
+    }
     sq.addEventListener('click',()=>onClick(i));
     el.appendChild(sq);
   }
@@ -635,11 +720,11 @@ async function doMove(m){
   const newTurn=opp(turn);
   const newPosHist=[...posHist.slice(-19),posKey(nb,newTurn,nep,ncas)];
 
-  // Clocks
+  // Clocks — apply delay then decrement, then add increment to mover
   const now=Date.now();
-  const elapsed=clockTickAt?(now-clockTickAt)/1000:0;
-  const newClockW=turn==='w'?Math.max(0,clockW-elapsed):clockW;
-  const newClockB=turn==='b'?Math.max(0,clockB-elapsed):clockB;
+  const elapsed=clockTickAt?Math.max(0,(now-clockTickAt)/1000 - clockDelay):0;
+  const newClockW=turn==='w'?Math.max(0,clockW-elapsed)+(clockInc):clockW;
+  const newClockB=turn==='b'?Math.max(0,clockB-elapsed)+(clockInc):clockB;
 
   // Game end check
   let newGameOver=false,endWinner=null,endReason='';
@@ -689,7 +774,15 @@ function askPromo(c){
   return new Promise(res=>{
     const ov=document.getElementById('promo-overlay'),pp=document.getElementById('promo-pieces');
     pp.innerHTML='';
-    ['Q','R','B','N'].forEach(t=>{const el=document.createElement('div');el.className='promo-piece';el.textContent=GLYPHS[c+t];el.onclick=()=>{ov.classList.add('hidden');res(t);};pp.appendChild(el);});
+    ['Q','R','B','N'].forEach(t=>{
+      const el=document.createElement('div');el.className='promo-piece';
+      const pe=document.createElement('span');
+      pe.textContent=PIECE_CHAR[c+t];
+      pe.style.cssText=pieceStyle(c+t)+'font-size:48px;';
+      el.appendChild(pe);
+      el.onclick=()=>{ov.classList.add('hidden');res(t);};
+      pp.appendChild(el);
+    });
     ov.classList.remove('hidden');
   });
 }
