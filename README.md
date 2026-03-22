@@ -36,7 +36,7 @@ All standard chess rules apply unless explicitly overridden below. This includes
 * **Checkmate Clause:** If the queen must capture a piece but cannot (because the king is in check), that is checkmate, unless the **M1 Special Rule** applies.
 
 ### King
-* **While in Check:** The king **must move**. It cannot block or capture the checking piece. This counts as one must-obligation.
+* **While in Check:** The king **must move**. You cannot block or capture the checking piece. This counts as one must-obligation.
 * **While Not in Check:** The king moves and captures normally.
 
 ---
