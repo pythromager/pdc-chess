@@ -294,24 +294,59 @@ async function hostGame(){
   ref.on('value',onServerUpdate);
 }
 
-async function joinGame(){
-  const code=document.getElementById('code-input').value.trim().toUpperCase();
-  if(code.length!==6){lobbyErr('Enter a 6-character code.');return;}
-  const ref=db.ref('games/'+code);
-  const snap=await ref.once('value');
-  if(!snap.exists()){lobbyErr('Game not found.');return;}
-  const d=snap.val();
-  if(d.guest==='joined'){lobbyErr('Game is full.');return;}
-  await ref.update({guest:'joined', guestOnline:true, clockTickAt:Date.now()});
-  myColor='b'; gameRef=ref; freshState();
-  clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
-  clockW=d.clockW; clockB=d.clockB;
-  setupPresence(ref,'guest');
+  async function joinGame() {
+  const code = document.getElementById('code-input').value.trim().toUpperCase();
+  
+  if (code.length !== 6) {
+    lobbyErr('Enter a 6-character code.');
+    return;
+  }
+  
+  const ref = db.ref('games/' + code);
+  const snap = await ref.once('value');
+  
+  if (!snap.exists()) {
+    lobbyErr('Game not found.');
+    return;
+  }
+  
+  const d = snap.val();
+  
+  // FIX: Allow joining if a previous guest disconnected
+  if (d.guest === 'joined' && d.guestOnline === true) {
+    lobbyErr('Game is full.');
+    return;
+  }
+  
+  await ref.update({ 
+    guest: 'joined', 
+    guestOnline: true, 
+    clockTickAt: Date.now() 
+  });
+  
+  myColor = 'b'; 
+  gameRef = ref; 
+  freshState();
+  
+  clockSecs = d.clockW; 
+  clockInc = d.clockInc || 0; 
+  clockDelay = d.clockDelay || 0; 
+  clockOn = d.clockOn;
+  clockW = d.clockW; 
+  clockB = d.clockB;
+  
+  setupPresence(ref, 'guest');
+  
   document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('my-color-label').textContent='You are Black';
-  ref.on('value',onServerUpdate);
-  startClock(); render();updateUI();updateClocks();
+  document.getElementById('my-color-label').textContent = 'You are Black';
+  
+  ref.on('value', onServerUpdate);
+  startClock(); 
+  render(); 
+  updateUI(); 
+  updateClocks();
 }
+  
 
 // ── Presence / disconnect detection ──────────────────────────────────────────
 function setupPresence(ref, role){
