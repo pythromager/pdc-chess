@@ -310,6 +310,8 @@ async function joinGame(){
   await ref.update({guest:'joined', guestOnline:true});
   
   myColor='b'; 
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('my-color-label').textContent='You are Black';
   gameRef=ref; 
   freshState();
   
@@ -358,7 +360,7 @@ function onServerUpdate(snap){
   const d=snap.val();
 
   // Host: detect guest joined
-  if(myColor==='w' && d.guest==='joined' && !document.getElementById('lobby').classList.contains('hidden')){
+  if(d.guest==='joined' && !document.getElementById('lobby').classList.contains('hidden')){
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('my-color-label').textContent='You are White';
     clockW=d.clockW; clockB=d.clockB;
