@@ -297,11 +297,14 @@ async function hostGame(){
 
 async function joinGame(){
   const code=document.getElementById('code-input').value.trim().toUpperCase();
+  console.log('joinGame called, code=',code);
   if(code.length!==6){lobbyErr('Enter a 6-character code.');return;}
   const ref=db.ref('games/'+code);
   const snap=await ref.once('value');
+  console.log('snap exists=',snap.exists(), 'val=',snap.val());
   if(!snap.exists()){lobbyErr('Game not found.');return;}
   const d=snap.val();
+  console.log('guest=',d.guest,'clockOn=',d.clockOn,'clockW=',d.clockW);
   await ref.update({guest:'joined', guestOnline:true});
   myColor='b'; gameRef=ref; freshState();
   clockSecs=d.clockW||300; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn!==false;
