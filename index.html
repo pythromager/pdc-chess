@@ -759,7 +759,7 @@ async function createGame(){
   initState.clockEnabled = clockEnabled;
   initState.clockLastTick = Date.now();
   initState.players = {w: true};
-  initState.status = 'waiting';
+  initState.status = 'waiting'; // explicitly waiting, not playing
 
   await gameRef.set(initState);
   myColor = 'w';
@@ -825,7 +825,7 @@ function buildStateObj(){
     gameOver,
     lastMoveFrom: lastMove?lastMove.from:-1,
     lastMoveTo: lastMove?lastMove.to:-1,
-    status: gameOver?'over':'playing'
+    status: gameOver?'over':'playing'  // only used for move updates, not initial creation
   };
 }
 
