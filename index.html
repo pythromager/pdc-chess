@@ -1,3 +1,6 @@
+Got it! Here's the complete fixed file with proper must enforcement:
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -378,12 +381,10 @@ function joinGame(){
     var d = snap.val();
     
     if(d.host === 'joined' && d.hostOnline === false){
-      // Reconnect as host
       ref.update({hostOnline: true});
       myColor = 'w';
       setupPresence(ref, 'host');
     } else if(d.guest === 'waiting' || (d.guest === 'joined' && d.guestOnline === false)){
-      // Join as guest
       ref.update({
         guest: 'joined',
         guestOnline: true,
@@ -440,7 +441,6 @@ function onServerUpdate(snap){
   if(!snap.exists()) return;
   var d = snap.val();
   
-  // Host: detect guest joined
   if(myColor === 'w' && d.guest === 'joined' && !document.getElementById('lobby').classList.contains('hidden')){
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('my-color-label').textContent = 'You are White';
@@ -455,7 +455,6 @@ function onServerUpdate(snap){
     updateClocks();
   }
   
-  // Sync state
   if(d.turn === myColor || d.gameOver || (myColor === 'b' && d.guest === 'joined')){
     board = d.board.map(function(x){ return x || null; });
     turn = d.turn;
@@ -674,6 +673,7 @@ function applyMove(b, m, cas){
   return {nb: nb, nep: nep, ncas: ncas};
 }
 
+// PDC moves - normal piece movement rules
 function pdcMovesFrom(b, i, ep, cas){
   var p = b[i];
   if(!p) return [];
@@ -803,6 +803,7 @@ function allPDCMoves(b, c, ep, cas){
   return all;
 }
 
+// Standard chess moves (for M1 checking)
 function allStdMoves(b, c, ep, cas){
   var all = [];
   for(var i = 0; i < 64; i++){
@@ -875,6 +876,7 @@ function allStdMoves(b, c, ep, cas){
   return all;
 }
 
+// Get all musts for a color
 function getMusts(b, c, ep, cas){
   var chks = getCheckers(b, c);
   var isChk = chks.length > 0;
@@ -888,6 +890,7 @@ function getMusts(b, c, ep, cas){
     var pos = rc(i);
     var r = pos.r, f = pos.f;
     
+    // Rook must capture within 3 squares
     if(t === 'R'){
       [[-1,0],[1,0],[0,-1],[0,1]].forEach(function(dir){
         for(var d = 1; d <= 3; d++){
@@ -902,6 +905,7 @@ function getMusts(b, c, ep, cas){
       });
     }
     
+    // Bishop must give check if able
     if(t === 'B'){
       var oppKi = kingIdx(b, opp(c));
       [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(dir){
@@ -921,6 +925,7 @@ function getMusts(b, c, ep, cas){
       });
     }
     
+    // Queen must capture non-knights
     if(t === 'Q'){
       [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(function(dir){
         var nr = r + dir[0], nf = f + dir[1];
@@ -941,27 +946,42 @@ function getMusts(b, c, ep, cas){
   return musts;
 }
 
+// Check if position is losing for opponent (for M1 escape)
 function isLosingForOpp(b, oppC, ep, cas){
   var chks = getCheckers(b, oppC);
   var isChk = chks.length > 0;
   var musts = getMusts(b, oppC, ep, cas);
   var pdcMoves = allPDCMoves(b, oppC, ep, cas);
   
+  // Checkmate - no legal moves and in check
   if(pdcMoves.length === 0 && isChk) return true;
+  
+  // In check AND must do bishop-check = impossible
   if(isChk && musts.some(function(m){ return m.kind === 'bishop-check'; })) return true;
+  
+  // In check AND must capture with queen = impossible
   if(isChk && musts.some(function(m){ return m.kind === 'queen-cap'; })) return true;
-  if(musts.length >= 2) return true;
+  
+  // Two or more musts = can't satisfy both
+  var forcedMusts = musts.filter(function(m){ return m.kind !== 'king-check'; });
+  if(forcedMusts.length >= 2) return true;
   
   return false;
 }
 
-function canM1Save(b, c, ep, cas){
-  var moves = allStdMoves(b, c, ep, cas);
-  for(var i = 0; i < moves.length; i++){
-    var result = applyMove(b, moves[i], cas);
-    if(isLosingForOpp(result.nb, opp(c), result.nep, result.ncas)) return true;
+// Check if there's an M1 available
+function findM1Moves(b, c, ep, cas){
+  var m1Moves = [];
+  var allMoves = allStdMoves(b, c, ep, cas);
+  
+  for(var i = 0; i < allMoves.length; i++){
+    var m = allMoves[i];
+    var result = applyMove(b, m, cas);
+    if(isLosingForOpp(result.nb, opp(c), result.nep, result.ncas)){
+      m1Moves.push(m);
+    }
   }
-  return false;
+  return m1Moves;
 }
 
 function evaluate(b, c, ep, cas){
@@ -974,18 +994,23 @@ function evaluate(b, c, ep, cas){
     return isChk ? {result: 'checkmate', winner: opp(c), reason: 'No legal moves'} : {result: 'stalemate'};
   }
   
+  var forcedMusts = musts.filter(function(m){ return m.kind !== 'king-check'; });
+  
   if(isChk && musts.some(function(m){ return m.kind === 'bishop-check'; })){
-    if(canM1Save(b, c, ep, cas)) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
+    var m1 = findM1Moves(b, c, ep, cas);
+    if(m1.length > 0) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
     return {result: 'checkmate', winner: opp(c), reason: 'Bishop must check but king is in check'};
   }
   
   if(isChk && musts.some(function(m){ return m.kind === 'queen-cap'; })){
-    if(canM1Save(b, c, ep, cas)) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
+    var m1 = findM1Moves(b, c, ep, cas);
+    if(m1.length > 0) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
     return {result: 'checkmate', winner: opp(c), reason: 'Queen must capture but king is in check'};
   }
   
-  if(musts.length >= 2){
-    if(canM1Save(b, c, ep, cas)) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
+  if(forcedMusts.length >= 2){
+    var m1 = findM1Moves(b, c, ep, cas);
+    if(m1.length > 0) return {result: 'ongoing', musts: musts, pdcMoves: pdcMoves, isChk: isChk};
     return {result: 'double-must', winner: opp(c)};
   }
   
@@ -1107,11 +1132,13 @@ function updateUI(){
   
   var musts = getMusts(board, turn, epSq, castling);
   var mustEl = document.getElementById('must-list');
+  var forcedMusts = musts.filter(function(m){ return m.kind !== 'king-check'; });
+  
   if(musts.length === 0){
     mustEl.innerHTML = 'None';
   } else {
     mustEl.innerHTML = musts.map(function(m){
-      if(m.kind === 'king-check') return '⚡ King must move';
+      if(m.kind === 'king-check') return '⚡ King in check!';
       var fr = rc(m.from), tr = rc(m.to);
       return '⚡ ' + board[m.from] + ' ' + sqN(fr.r, fr.f) + '→' + sqN(tr.r, tr.f);
     }).join('<br>');
@@ -1139,33 +1166,57 @@ function setStatus(msg, cls){
   el.className = 'status ' + (cls || '');
 }
 
-function violatesMusts(m){
+// ============================================================
+// MAIN FIX: getLegalMoves enforces musts properly
+// ============================================================
+function getLegalMoves(fromIdx){
   var musts = getMusts(board, turn, epSq, castling);
-  var isChk = musts.some(function(x){ return x.kind === 'king-check'; });
+  var forcedMusts = musts.filter(function(m){ return m.kind !== 'king-check'; });
   
-  if(isChk && typ(board[m.from]) === 'K'){
-    var chks = getCheckers(board, turn);
-    for(var ci = 0; ci < chks.length; ci++){
-      for(var qi = 0; qi < 64; qi++){
-        if(board[qi] === turn + 'Q' && rawAttacks(board, qi).includes(chks[ci])) return true;
+  // If there are forced musts (rook-cap, bishop-check, queen-cap)
+  if(forcedMusts.length > 0){
+    // Get must moves from this square
+    var mustMovesHere = [];
+    forcedMusts.forEach(function(must){
+      if(must.from === fromIdx){
+        mustMovesHere.push({from: must.from, to: must.to, cap: true});
       }
-    }
-  }
-  
-  if(musts.length === 0) return false;
-  
-  for(var i = 0; i < musts.length; i++){
-    var must = musts[i];
-    if(must.kind === 'king-check'){
+    });
+    
+    // Filter out moves that leave king in check
+    mustMovesHere = mustMovesHere.filter(function(m){
       var result = applyMove(board, m, castling);
-      if(isInCheck(result.nb, turn)) return true;
-    } else {
-      if(!(m.from === must.from && m.to === must.to)) return true;
-    }
+      return !isInCheck(result.nb, turn);
+    });
+    
+    // Also check for M1 moves from this square
+    var m1Moves = findM1Moves(board, turn, epSq, castling);
+    var m1FromHere = m1Moves.filter(function(m){ return m.from === fromIdx; });
+    
+    // Combine must moves + M1 moves, remove duplicates
+    var combined = mustMovesHere.slice();
+    m1FromHere.forEach(function(m){
+      var isDupe = combined.some(function(c){ return c.from === m.from && c.to === m.to; });
+      if(!isDupe) combined.push(m);
+    });
+    
+    return combined;
   }
-  return false;
+  
+  // No forced musts - use normal PDC rules
+  // But if in check, king must escape
+  if(musts.some(function(m){ return m.kind === 'king-check'; })){
+    // In check - any legal move that gets out of check
+    return pdcMovesFrom(board, fromIdx, epSq, castling);
+  }
+  
+  // Normal moves
+  return pdcMovesFrom(board, fromIdx, epSq, castling);
 }
 
+// ============================================================
+// CLICK HANDLER - uses getLegalMoves
+// ============================================================
 function onClick(i){
   if(gameOver) return;
   
@@ -1174,39 +1225,39 @@ function onClick(i){
     return;
   }
   
+  // Clicking on destination for selected piece
   if(sel !== null){
     var moveToPlay = hilights.find(function(m){ return m.to === i; });
     if(moveToPlay){
-      if(violatesMusts(moveToPlay)){
-        var result = applyMove(board, moveToPlay, castling);
-        if(isLosingForOpp(result.nb, opp(turn), result.nep, result.ncas)){
-          doMove(moveToPlay);
-        } else {
-          setStatus('⚡ Illegal — violates a must.', 'warn');
-        }
-        return;
-      }
       doMove(moveToPlay);
       return;
     }
   }
   
+  // Clicking on own piece
   if(board[i] && clr(board[i]) === turn){
-    var musts = getMusts(board, turn, epSq, castling);
-    var candidates = musts.length > 0 
-      ? allStdMoves(board, turn, epSq, castling).filter(function(m){ return m.from === i; })
-      : allPDCMoves(board, turn, epSq, castling).filter(function(m){ return m.from === i; });
-    
-    var moves = candidates.filter(function(m){
-      if(!violatesMusts(m)) return true;
-      var result = applyMove(board, m, castling);
-      return isLosingForOpp(result.nb, opp(turn), result.nep, result.ncas);
-    });
+    var moves = getLegalMoves(i);
     
     sel = i;
     hilights = moves;
     render();
-    setStatus('Selected ' + board[i] + ' at ' + sqN(rc(i).r, rc(i).f));
+    
+    var musts = getMusts(board, turn, epSq, castling);
+    var forcedMusts = musts.filter(function(m){ return m.kind !== 'king-check'; });
+    
+    if(moves.length === 0){
+      if(forcedMusts.length > 0){
+        setStatus('⚡ No legal moves here — must play forced move or M1', 'warn');
+      } else {
+        setStatus('No legal moves from this square');
+      }
+    } else if(forcedMusts.length > 0){
+      setStatus('⚡ Must active — play forced move or M1', 'warn');
+    } else if(musts.some(function(m){ return m.kind === 'king-check'; })){
+      setStatus('⚡ In check — must escape', 'warn');
+    } else {
+      setStatus('Selected ' + board[i] + ' at ' + sqN(rc(i).r, rc(i).f));
+    }
     return;
   }
   
@@ -1251,11 +1302,10 @@ function handlePremoveClick(i){
 }
 
 function executePremove(pm){
-  var moves = allPDCMoves(board, turn, epSq, castling).filter(function(m){
-    return m.from === pm.from && m.to === pm.to;
-  });
-  if(moves.length > 0 && !violatesMusts(moves[0])){
-    doMove(moves[0]);
+  var moves = getLegalMoves(pm.from);
+  var validMove = moves.find(function(m){ return m.to === pm.to; });
+  if(validMove){
+    doMove(validMove);
   }
 }
 
@@ -1274,7 +1324,7 @@ function doMove(m){
 }
 
 function finishMove(m){
-  var wasCap = !!m.cap;
+  var wasCap = !!m.cap || (board[m.to] !== null);
   var result = applyMove(board, m, castling);
   var nb = result.nb;
   var nep = result.nep;
@@ -1368,7 +1418,7 @@ function finishMove(m){
     var ev = evaluate(board, turn, epSq, castling);
     if(ev.isChk){
       setStatus((turn === 'w' ? 'White' : 'Black') + ' is in check!', 'warn');
-    } else if(ev.musts && ev.musts.length > 0){
+    } else if(ev.musts && ev.musts.filter(function(m){ return m.kind !== 'king-check'; }).length > 0){
       setStatus('⚡ Musts active', 'warn');
     } else {
       setStatus('');
@@ -1379,7 +1429,7 @@ function finishMove(m){
   updateClocks();
 }
 
-function askPromo(c){
+  function askPromo(c){
   return new Promise(function(resolve){
     var ov = document.getElementById('promo-overlay');
     var pp = document.getElementById('promo-pieces');
