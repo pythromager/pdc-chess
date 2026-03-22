@@ -286,6 +286,8 @@ async function hostGame(){
     clockTickAt:0, host:'joined', guest:'waiting', hostOnline:true, guestOnline:false
   });
   myColor='w'; gameRef=ref;
+  localStorage.setItem('pdc-code',code);
+  localStorage.setItem('pdc-color','w');
   setupPresence(ref,'host');
   document.getElementById('screen-home').classList.add('hidden');
   document.getElementById('screen-wait').classList.remove('hidden');
@@ -300,9 +302,18 @@ async function joinGame(){
   const snap=await ref.once('value');
   if(!snap.exists()){lobbyErr('Game not found.');return;}
   const d=snap.val();
-  if(d.guest==='joined'){lobbyErr('Game is full.');return;}
-  await ref.update({guest:'joined', guestOnline:true, clockTickAt:Date.now()});
+
+  // Check if this player was previously in this game (rejoin after refresh)
+  const savedCode=localStorage.getItem('pdc-code');
+  const savedColor=localStorage.getItem('pdc-color');
+  const isRejoin=(savedCode===code && savedColor==='b');
+
+  if(d.guest==='joined' && !isRejoin){lobbyErr('Game is full.');return;}
+
+  await ref.update({guest:'joined', guestOnline:true, clockTickAt:d.clockTickAt||Date.now()});
   myColor='b'; gameRef=ref; freshState();
+  localStorage.setItem('pdc-code',code);
+  localStorage.setItem('pdc-color','b');
   clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
   clockW=d.clockW; clockB=d.clockB;
   setupPresence(ref,'guest');
@@ -790,6 +801,25 @@ function askPromo(c){
 // ── Boot ──────────────────────────────────────────────────────────────────────
 freshState();
 render();
+
+// Auto-rejoin if refreshed mid-game
+(async()=>{
+  const code=localStorage.getItem('pdc-code');
+  const color=localStorage.getItem('pdc-color');
+  if(!code||!color) return;
+  const ref=db.ref('games/'+code);
+  const snap=await ref.once('value');
+  if(!snap.exists()||snap.val().gameOver) return;
+  const d=snap.val();
+  myColor=color; gameRef=ref;
+  clockSecs=d.clockW; clockInc=d.clockInc||0; clockDelay=d.clockDelay||0; clockOn=d.clockOn;
+  clockW=d.clockW; clockB=d.clockB;
+  setupPresence(ref, color==='w'?'host':'guest');
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('my-color-label').textContent='You are '+(color==='w'?'White':'Black')+' (rejoined)';
+  ref.on('value',onServerUpdate);
+  startClock(); render(); updateUI(); updateClocks();
+})();
 </script>
 </body>
 </html>
