@@ -779,7 +779,6 @@ async function joinGame(){
   if(!snap.exists()){ lobbyStatus('Game not found.'); return; }
   const data = snap.val();
   if(data.status === 'over'){ lobbyStatus('Game already finished.'); return; }
-  if(data.players && data.players.b){ lobbyStatus('Game is full.'); return; }
 
   gameCode = code;
   myColor = 'b';
@@ -802,8 +801,8 @@ function listenToGame(){
     if(!snap.exists()) return;
     const data = snap.val();
 
-    // If opponent just joined, hide lobby
-    if(myColor==='w' && data.status==='playing' && document.getElementById('lobby').style.display!=='none'){
+    // If opponent just joined (player 1 side), hide lobby and start
+    if(myColor==='w' && data.status==='playing' && !document.getElementById('lobby').classList.contains('hidden')){
       document.getElementById('lobby').classList.add('hidden');
       startLocalRender();
     }
