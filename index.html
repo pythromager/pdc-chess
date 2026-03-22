@@ -295,43 +295,40 @@ async function hostGame(){
   ref.on('value',onServerUpdate);
 }
 
-  async function joinGame() {
-  const code = document.getElementById('code-input').value.trim().toUpperCase();
-  if (code.length !== 6) { lobbyErr('Enter a 6-character code.'); return; }
+async function joinGame(){
+  const code=document.getElementById('code-input').value.trim().toUpperCase();
+  if(code.length!==6){lobbyErr('Enter a 6-character code.');return;}
   
-  const ref = db.ref('games/' + code);
-  const snap = await ref.once('value');
+  const ref=db.ref('games/'+code);
+  const snap=await ref.once('value');
   
-  if (!snap.exists()) { 
-    lobbyErr('Game not found.'); 
-    return; 
-  }
+  if(!snap.exists()){lobbyErr('Game not found.');return;}
   
-  const d = snap.val();
+  const d=snap.val();
   
-  // 1. Update the database to let the host know we joined
-  await ref.update({ guest: 'joined', guestOnline: true });
+  // Set guest status and online presence
+  await ref.update({guest:'joined', guestOnline:true});
   
-  // 2. Set local identity
-  myColor = 'b'; 
-  gameRef = ref; 
+  myColor='b'; 
+  gameRef=ref; 
   freshState();
   
-  // 3. Sync initial clock and state settings
-  clockSecs = d.clockW || 300; 
-  clockInc = d.clockInc || 0; 
-  clockDelay = d.clockDelay || 0; 
-  clockOn = d.clockOn !== false;
-  clockW = d.clockW || 300; 
-  clockB = d.clockB || 300;
+  // Sync clock settings from the host's configuration
+  clockSecs=d.clockW||300; 
+  clockInc=d.clockInc||0; 
+  clockDelay=d.clockDelay||0; 
+  clockOn=d.clockOn!==false;
+  clockW=d.clockW||300; 
+  clockB=d.clockB||300;
   
-  // 4. FIX: Manually hide the lobby for the Guest
+  // Setup presence and listeners
+  setupPresence(ref,'guest');
+  ref.on('value',onServerUpdate);
+  
+  // HIDE LOBBY AND INITIALIZE UI
   document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('my-color-label').textContent = 'You are Black';
+  document.getElementById('my-color-label').textContent='You are Black';
   
-  // 5. Initialize listeners and UI
-  setupPresence(ref, 'guest');
-  ref.on('value', onServerUpdate);
   startClock(); 
   render(); 
   updateUI(); 
