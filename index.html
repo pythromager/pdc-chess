@@ -778,7 +778,8 @@ async function joinGame(){
   const snap = await gameRef.once('value');
   if(!snap.exists()){ lobbyStatus('Game not found.'); return; }
   const data = snap.val();
-  if(data.status !== 'waiting'){ lobbyStatus('Game already started or finished.'); return; }
+  if(data.status === 'over'){ lobbyStatus('Game already finished.'); return; }
+  if(data.players && data.players.b){ lobbyStatus('Game is full.'); return; }
 
   gameCode = code;
   myColor = 'b';
